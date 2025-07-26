@@ -1,0 +1,6 @@
+pandas
+GitPython
+docker
+Jinja2
+python-gitlab
+openpyxl
