@@ -101,6 +101,34 @@ GENERATE_EXCEL_REPORT = True # New flag to control Excel report generation
 
 ---
 
+---
+
+## 🖥️ Sentinel Console (web application)
+
+`webapp/` contains an enterprise web application that turns this scanner into a
+managed platform: register applications with their HOD, SPOC and git repository,
+scan every branch on demand through a Redis queue, triage the findings and hand
+auditors a complete trail.
+
+*   **Stack**: React + Material UI (light, glassmorphic) · Node.js + Express · MongoDB · Redis (BullMQ)
+*   **Authentication**: local accounts **or** corporate LDAP/AD, optional TOTP MFA, lockout and password policy
+*   **Notifications**: queued SMTP mail for scan results, critical findings and account events
+*   **Auditing**: every action stored in MongoDB and mirrored to syslog (RFC 5424/3164)
+*   **Applications & branches**: register an application once, then scan any number of its branches independently — each branch keeps its own history, schedule and findings
+*   **Scanning**: the same gitleaks engine, driven by workers (`mock`, `native` or `docker` driver)
+
+```bash
+cd webapp
+cp server/.env.example server/.env    # set the two JWT secrets
+docker compose up --build             # console on http://localhost:8080
+docker compose exec api npm run seed  # demo users, applications and branch scans
+```
+
+See [`webapp/README.md`](webapp/README.md) for a local (non-container) setup, and
+[`webapp/docs/`](webapp/docs) for the architecture and operations runbook.
+
+---
+
 ## 💬 Notes
 
 *   Gitleaks output includes HTML reports with line-level links back to GitLab commits (if commit ID is provided).
