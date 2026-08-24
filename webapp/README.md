@@ -42,7 +42,7 @@ cd ../server && cp .env.example .env      # then set the two JWT secrets
 docker run -d -p 27017:27017 --name sentinel-mongo mongo:7
 docker run -d -p 6379:6379   --name sentinel-redis redis:7-alpine
 
-# 4. demo data — creates admin/analyst/developer/auditor plus projects and scans
+# 4. demo data — users, applications with HOD/SPOC, and a scan history per branch
 npm run seed
 
 # 5. run it (three terminals)

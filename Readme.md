@@ -121,7 +121,7 @@ auditors a complete trail.
 cd webapp
 cp server/.env.example server/.env    # set the two JWT secrets
 docker compose up --build             # console on http://localhost:8080
-docker compose exec api npm run seed  # demo users, projects and scans
+docker compose exec api npm run seed  # demo users, applications and branch scans
 ```
 
 See [`webapp/README.md`](webapp/README.md) for a local (non-container) setup, and
