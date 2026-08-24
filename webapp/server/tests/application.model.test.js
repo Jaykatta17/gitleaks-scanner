@@ -72,6 +72,19 @@ describe('application document', () => {
   it('requires a name and an email on each contact', () => {
     const errors = new Application({ ...validApplication, spoc: { name: 'Only Name' } }).validateSync().errors;
     expect(Object.keys(errors)).toContain('spoc.email');
+    const hodErrors = new Application({ ...validApplication, hod: { name: 'Only Name' } }).validateSync().errors;
+    expect(Object.keys(hodErrors)).toContain('hod.email');
+  });
+
+  it('records only a name and an email for the head of department', () => {
+    const application = new Application({
+      ...validApplication,
+      hod: { name: 'Meera Iyer', email: 'meera.iyer@corp.local', phone: '+91 80 4000 1201', designation: 'Head' },
+      spoc: { name: 'Arjun Kumar', email: 'arjun.kumar@corp.local', phone: '+91 98450 11223' },
+    });
+    expect(application.hod.toObject()).toEqual({ name: 'Meera Iyer', email: 'meera.iyer@corp.local' });
+    // The SPOC is the working contact, so their details are kept.
+    expect(application.spoc.phone).toBe('+91 98450 11223');
   });
 
   it('requires a repository URL', () => {

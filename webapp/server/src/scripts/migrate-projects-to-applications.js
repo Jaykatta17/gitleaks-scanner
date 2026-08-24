@@ -31,14 +31,8 @@ const run = async () => {
 
   const projects = await db.collection('projects').find({}).toArray();
   const applications = projects.map((project) => {
-    const contact = {
-      name: project.maintainerEmail?.split('@')[0] || 'Unknown',
-      email: project.maintainerEmail || 'unknown@example.invalid',
-      employeeId: '',
-      department: project.businessUnit || '',
-      designation: '',
-      phone: '',
-    };
+    const email = project.maintainerEmail || 'unknown@example.invalid';
+    const name = project.maintainerEmail?.split('@')[0] || 'Unknown';
     const defaultBranch = project.defaultBranch || 'main';
     return {
       _id: project._id,
@@ -51,8 +45,8 @@ const run = async () => {
       assessmentType: project.assessmentType || 'internal',
       environmentTier: '',
       // The maintainer becomes the SPOC; the HOD must be corrected by an admin.
-      hod: { ...contact, designation: 'To be confirmed' },
-      spoc: contact,
+      hod: { name, email },
+      spoc: { name, email, employeeId: '', department: project.businessUnit || '', designation: '', phone: '' },
       repository: {
         url: project.repoUrl,
         provider: 'other',

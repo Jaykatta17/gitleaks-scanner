@@ -105,9 +105,14 @@ const branchName = z
     'Not a valid git branch name',
   );
 
-export const contactSchema = z.object({
+/** Head of department: name and email are all that is recorded. */
+export const hodSchema = z.object({
   name: z.string().min(2).max(120).trim(),
   email: z.string().email().toLowerCase(),
+});
+
+/** SPOC: the working contact, so the full details are available. */
+export const spocSchema = hodSchema.extend({
   employeeId: z.string().max(40).trim().optional().default(''),
   department: z.string().max(120).trim().optional().default(''),
   designation: z.string().max(120).trim().optional().default(''),
@@ -138,9 +143,9 @@ export const createApplicationSchema = z.object({
   assessmentType: z.enum(ASSESSMENT_TYPES).default('internal'),
   environmentTier: z.string().max(60).trim().optional().default(''),
 
-  hod: contactSchema,
-  spoc: contactSchema,
-  backupSpoc: contactSchema.optional(),
+  hod: hodSchema,
+  spoc: spocSchema,
+  backupSpoc: spocSchema.optional(),
 
   repository: z.object({
     url: gitUrl,

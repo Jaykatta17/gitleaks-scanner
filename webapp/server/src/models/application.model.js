@@ -5,8 +5,17 @@ export const CRITICALITIES = ['low', 'medium', 'high', 'critical'];
 export const GIT_PROVIDERS = ['github', 'gitlab', 'bitbucket', 'azure_devops', 'gitea', 'other'];
 export const BRANCH_ENVIRONMENTS = ['production', 'staging', 'development', 'release', 'feature', 'other'];
 
-/** Head of department / SPOC contact block — who answers for this application. */
-const contactSchema = new mongoose.Schema(
+/** The head of department is recorded for accountability: a name and an inbox. */
+const hodSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true, trim: true },
+    email: { type: String, required: true, lowercase: true, trim: true },
+  },
+  { _id: false },
+);
+
+/** The SPOC does the day-to-day work, so their full contact details are kept. */
+const spocSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, lowercase: true, trim: true },
@@ -58,9 +67,9 @@ const applicationSchema = new mongoose.Schema(
     assessmentType: { type: String, enum: ASSESSMENT_TYPES, default: 'internal' },
     environmentTier: { type: String, default: '', trim: true },
 
-    hod: { type: contactSchema, required: true },
-    spoc: { type: contactSchema, required: true },
-    backupSpoc: { type: contactSchema, default: undefined },
+    hod: { type: hodSchema, required: true },
+    spoc: { type: spocSchema, required: true },
+    backupSpoc: { type: spocSchema, default: undefined },
 
     repository: {
       url: { type: String, required: true, trim: true },

@@ -69,7 +69,7 @@ docker compose exec api npm run seed
 |---|---|
 | **Sign-in** | local password **or** corporate LDAP/AD, optional TOTP MFA with recovery codes, lockout, password history and reset-by-email |
 | **Access** | four roles — administrator, security analyst, developer, viewer — enforced on every route; LDAP groups map to roles |
-| **Applications** | register with key, inventory id, business unit, criticality, HOD and SPOC (plus optional backup SPOC), and git repository (provider, visibility, credential reference) |
+| **Applications** | register with key, inventory id, business unit, criticality, the HOD (name and email), the SPOC with full contact details (plus an optional backup SPOC), and the git repository (provider, visibility, credential reference) |
 | **Branches** | register any number of branches per application, each with its own environment, nightly schedule, scan history and finding counters; add, pause, re-default or stop tracking at any time |
 | **Scans** | run per branch — one branch, several selected branches, or every branch at once — queued through Redis and executed by workers (`mock`/`native`/`docker` gitleaks drivers), with live status, logs, cancel and retry |
 | **Findings** | severity-classified, fingerprinted, **redacted** secrets, attributed to an application *and* a branch; triage workflow, bulk actions and CSV export |

@@ -27,13 +27,17 @@ const USERS = [
   { username: 'auditor', email: 'auditor@sentinel.local', displayName: 'Lena Fischer', role: 'viewer', department: 'Internal Audit' },
 ];
 
-const contact = (name, email, designation, department, phone) => ({
+/** The head of department is just a name and an inbox. */
+const hod = (name, email) => ({ name, email });
+
+/** The SPOC carries the working contact details. */
+const spoc = (name, email, designation, department, phone) => ({
   name,
   email,
   designation,
   department,
   phone,
-  employeeId: `EMP${Math.abs([...email].reduce((acc, char) => acc * 31 + char.charCodeAt(0), 7)) % 900000 + 100000}`,
+  employeeId: `EMP${(Math.abs([...email].reduce((acc, char) => acc * 31 + char.charCodeAt(0), 7)) % 900000) + 100000}`,
 });
 
 const APPLICATIONS = [
@@ -45,9 +49,9 @@ const APPLICATIONS = [
     criticality: 'critical',
     businessUnit: 'Payments',
     assessmentType: 'regulatory',
-    hod: contact('Meera Iyer', 'meera.iyer@corp.local', 'Head of Payments Engineering', 'Payments', '+91 80 4000 1201'),
-    spoc: contact('Arjun Kumar', 'arjun.kumar@corp.local', 'Lead Engineer', 'Payments', '+91 98450 11223'),
-    backupSpoc: contact('Neha Verma', 'neha.verma@corp.local', 'Senior Engineer', 'Payments', ''),
+    hod: hod('Meera Iyer', 'meera.iyer@corp.local'),
+    spoc: spoc('Arjun Kumar', 'arjun.kumar@corp.local', 'Lead Engineer', 'Payments', '+91 98450 11223'),
+    backupSpoc: spoc('Neha Verma', 'neha.verma@corp.local', 'Senior Engineer', 'Payments', ''),
     tags: ['pci', 'tier-1'],
     branches: [
       { name: 'main', environment: 'production', isDefault: true, schedule: { enabled: true, cron: '0 3 * * *' } },
@@ -63,8 +67,8 @@ const APPLICATIONS = [
     criticality: 'high',
     businessUnit: 'Digital',
     assessmentType: 'internal',
-    hod: contact('Daniel Okoro', 'daniel.okoro@corp.local', 'Head of Digital Channels', 'Digital', '+44 20 7946 0102'),
-    spoc: contact('Sofia Rossi', 'sofia.rossi@corp.local', 'Engineering Manager', 'Digital', ''),
+    hod: hod('Daniel Okoro', 'daniel.okoro@corp.local'),
+    spoc: spoc('Sofia Rossi', 'sofia.rossi@corp.local', 'Engineering Manager', 'Digital', ''),
     tags: ['tier-1', 'public'],
     branches: [
       { name: 'main', environment: 'production', isDefault: true },
@@ -79,8 +83,8 @@ const APPLICATIONS = [
     criticality: 'high',
     businessUnit: 'Digital',
     assessmentType: 'external',
-    hod: contact('Daniel Okoro', 'daniel.okoro@corp.local', 'Head of Digital Channels', 'Digital', '+44 20 7946 0102'),
-    spoc: contact('Kenji Watanabe', 'kenji.watanabe@corp.local', 'Mobile Lead', 'Digital', ''),
+    hod: hod('Daniel Okoro', 'daniel.okoro@corp.local'),
+    spoc: spoc('Kenji Watanabe', 'kenji.watanabe@corp.local', 'Mobile Lead', 'Digital', ''),
     tags: ['mobile'],
     branches: [
       { name: 'main', environment: 'production', isDefault: true },
@@ -95,8 +99,8 @@ const APPLICATIONS = [
     criticality: 'medium',
     businessUnit: 'Data',
     assessmentType: 'internal',
-    hod: contact('Priya Raman', 'priya.raman@corp.local', 'Head of Data Platform', 'Data', ''),
-    spoc: contact('Tom Becker', 'tom.becker@corp.local', 'Data Engineer', 'Data', ''),
+    hod: hod('Priya Raman', 'priya.raman@corp.local'),
+    spoc: spoc('Tom Becker', 'tom.becker@corp.local', 'Data Engineer', 'Data', ''),
     tags: ['batch'],
     branches: [{ name: 'master', environment: 'production', isDefault: true }],
   },
@@ -108,8 +112,8 @@ const APPLICATIONS = [
     criticality: 'critical',
     businessUnit: 'Platform',
     assessmentType: 'internal',
-    hod: contact('Elena Petrova', 'elena.petrova@corp.local', 'Head of Platform Engineering', 'Platform', ''),
-    spoc: contact('Marcus Hale', 'marcus.hale@corp.local', 'SRE Lead', 'Platform', '+1 415 555 0142'),
+    hod: hod('Elena Petrova', 'elena.petrova@corp.local'),
+    spoc: spoc('Marcus Hale', 'marcus.hale@corp.local', 'SRE Lead', 'Platform', '+1 415 555 0142'),
     tags: ['terraform', 'tier-1'],
     branches: [
       { name: 'main', environment: 'production', isDefault: true, schedule: { enabled: true, cron: '0 2 * * *' } },
@@ -124,8 +128,8 @@ const APPLICATIONS = [
     criticality: 'low',
     businessUnit: 'Finance',
     assessmentType: 'third_party',
-    hod: contact('Robert King', 'robert.king@corp.local', 'Head of Finance Systems', 'Finance', ''),
-    spoc: contact('Grace Mwangi', 'grace.mwangi@corp.local', 'Application Owner', 'Finance', ''),
+    hod: hod('Robert King', 'robert.king@corp.local'),
+    spoc: spoc('Grace Mwangi', 'grace.mwangi@corp.local', 'Application Owner', 'Finance', ''),
     tags: ['legacy'],
     branches: [{ name: 'trunk', environment: 'production', isDefault: true }],
   },

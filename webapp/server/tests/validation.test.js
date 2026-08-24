@@ -75,6 +75,14 @@ describe('application registration payload', () => {
     expect(result.error.issues[0].path).toEqual(['spoc', 'email']);
   });
 
+  it('keeps the head of department to a name and an email', () => {
+    const application = createApplicationSchema.parse({
+      ...validApplication,
+      hod: { name: 'Meera Iyer', email: 'meera.iyer@corp.local', phone: '+91 80 4000 1201', employeeId: 'EMP1' },
+    });
+    expect(application.hod).toEqual({ name: 'Meera Iyer', email: 'meera.iyer@corp.local' });
+  });
+
   it('accepts an optional backup SPOC', () => {
     const application = createApplicationSchema.parse({
       ...validApplication,

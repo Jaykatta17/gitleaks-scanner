@@ -54,8 +54,10 @@ dayjs.extend(relativeTime);
 
 const ENVIRONMENTS = ['production', 'staging', 'development', 'release', 'feature', 'other'];
 
-const ContactCard = ({ title, contact }) =>
-  contact ? (
+const ContactCard = ({ title, contact, detailed = true }) => {
+  if (!contact?.name) return null;
+  const secondary = detailed ? [contact.employeeId, contact.phone].filter(Boolean).join(' · ') : '';
+  return (
     <Box>
       <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em' }}>
         {title}
@@ -63,19 +65,24 @@ const ContactCard = ({ title, contact }) =>
       <Typography variant="body1" fontWeight={600}>
         {contact.name}
       </Typography>
-      <Typography variant="body2" color="text.secondary">
-        {contact.designation || '—'}
-      </Typography>
+      {detailed && contact.designation && (
+        <Typography variant="body2" color="text.secondary">
+          {contact.designation}
+        </Typography>
+      )}
       <Typography variant="body2" sx={{ mt: 0.5 }}>
         <a href={`mailto:${contact.email}`} style={{ color: palette.brand[600] }}>
           {contact.email}
         </a>
       </Typography>
-      <Typography variant="body2" color="text.secondary">
-        {[contact.employeeId, contact.phone].filter(Boolean).join(' · ') || '—'}
-      </Typography>
+      {secondary && (
+        <Typography variant="body2" color="text.secondary">
+          {secondary}
+        </Typography>
+      )}
     </Box>
-  ) : null;
+  );
+};
 
 export const ApplicationDetailPage = () => {
   const { id } = useParams();
@@ -460,7 +467,7 @@ export const ApplicationDetailPage = () => {
           <Grid item xs={12} md={6}>
             <GlassCard sx={{ height: '100%' }} title="Ownership" subtitle="Accountable contacts for this application">
               <Stack spacing={2.5} divider={<Divider flexItem />}>
-                <ContactCard title="Head of department" contact={application.hod} />
+                <ContactCard title="Head of department" contact={application.hod} detailed={false} />
                 <ContactCard title="SPOC" contact={application.spoc} />
                 {application.backupSpoc?.email && <ContactCard title="Backup SPOC" contact={application.backupSpoc} />}
               </Stack>

@@ -74,8 +74,9 @@ An **application** is the unit of ownership and registration:
 
 ```
 Application  key, name, inventory id, business unit, criticality, assessment type
-  ├── hod          name, email, employee id, designation, department, phone
-  ├── spoc         (same shape) — receives notifications; backupSpoc is optional
+  ├── hod          name, email — recorded for accountability, copied on notifications
+  ├── spoc         name, email, employee id, designation, department, phone —
+  │                the working contact; backupSpoc has the same shape and is optional
   ├── repository   url, provider, defaultBranch, visibility, credentialRef
   └── branches[]   name, environment, isDefault, scanEnabled, schedule, stats
                    stats = lastScanId/At/Status, totalScans, open + critical findings

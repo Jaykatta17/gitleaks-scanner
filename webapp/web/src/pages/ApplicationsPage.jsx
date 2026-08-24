@@ -45,7 +45,8 @@ const PROVIDERS = ['github', 'gitlab', 'bitbucket', 'azure_devops', 'gitea', 'ot
 const ENVIRONMENTS = ['production', 'staging', 'development', 'release', 'feature', 'other'];
 const CRITICALITY_COLOR = { critical: 'error', high: 'warning', medium: 'info', low: 'default' };
 
-const emptyContact = { name: '', email: '', employeeId: '', designation: '', department: '', phone: '' };
+const emptyHod = { name: '', email: '' };
+const emptySpoc = { name: '', email: '', employeeId: '', designation: '', department: '', phone: '' };
 
 const emptyForm = {
   key: '',
@@ -56,18 +57,21 @@ const emptyForm = {
   criticality: 'medium',
   assessmentType: 'internal',
   tags: '',
-  hod: { ...emptyContact },
-  spoc: { ...emptyContact },
+  hod: { ...emptyHod },
+  spoc: { ...emptySpoc },
   useBackupSpoc: false,
-  backupSpoc: { ...emptyContact },
+  backupSpoc: { ...emptySpoc },
   repository: { url: '', provider: 'github', defaultBranch: 'main', visibility: 'private', credentialRef: '' },
   branches: [{ name: 'main', environment: 'production', isDefault: true, scanEnabled: true }],
 };
 
 const STEPS = ['Application', 'Ownership', 'Repository & branches'];
 
-/** One reusable block for the HOD, SPOC and backup SPOC. */
-const ContactFields = ({ value, onChange, label, required }) => (
+/**
+ * Contact block. The head of department is recorded as a name and an inbox;
+ * the SPOC (and backup) carry the working details as well.
+ */
+const ContactFields = ({ value, onChange, label, required, detailed = true, hint }) => (
   <Box>
     <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, textTransform: 'uppercase' }}>
       {label}
@@ -92,31 +96,40 @@ const ContactFields = ({ value, onChange, label, required }) => (
           onChange={(event) => onChange({ ...value, email: event.target.value })}
         />
       </Grid>
-      <Grid item xs={12} sm={4}>
-        <TextField
-          fullWidth
-          label="Employee ID"
-          value={value.employeeId}
-          onChange={(event) => onChange({ ...value, employeeId: event.target.value })}
-        />
-      </Grid>
-      <Grid item xs={12} sm={4}>
-        <TextField
-          fullWidth
-          label="Designation"
-          value={value.designation}
-          onChange={(event) => onChange({ ...value, designation: event.target.value })}
-        />
-      </Grid>
-      <Grid item xs={12} sm={4}>
-        <TextField
-          fullWidth
-          label="Phone"
-          value={value.phone}
-          onChange={(event) => onChange({ ...value, phone: event.target.value })}
-        />
-      </Grid>
+      {detailed && (
+        <>
+          <Grid item xs={12} sm={4}>
+            <TextField
+              fullWidth
+              label="Employee ID"
+              value={value.employeeId}
+              onChange={(event) => onChange({ ...value, employeeId: event.target.value })}
+            />
+          </Grid>
+          <Grid item xs={12} sm={4}>
+            <TextField
+              fullWidth
+              label="Designation"
+              value={value.designation}
+              onChange={(event) => onChange({ ...value, designation: event.target.value })}
+            />
+          </Grid>
+          <Grid item xs={12} sm={4}>
+            <TextField
+              fullWidth
+              label="Phone"
+              value={value.phone}
+              onChange={(event) => onChange({ ...value, phone: event.target.value })}
+            />
+          </Grid>
+        </>
+      )}
     </Grid>
+    {hint && (
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+        {hint}
+      </Typography>
+    )}
   </Box>
 );
 
@@ -517,7 +530,9 @@ export const ApplicationsPage = () => {
             <Stack spacing={3}>
               <ContactFields
                 required
+                detailed={false}
                 label="Head of department"
+                hint="Recorded for accountability and copied on notifications."
                 value={form.hod}
                 onChange={(hod) => setForm((state) => ({ ...state, hod }))}
               />
