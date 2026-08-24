@@ -1,7 +1,12 @@
 import { z } from 'zod';
 import env from '../config/env.js';
 import { ROLES } from '../models/user.model.js';
-import { ASSESSMENT_TYPES, CRITICALITIES } from '../models/project.model.js';
+import {
+  ASSESSMENT_TYPES,
+  CRITICALITIES,
+  GIT_PROVIDERS,
+  BRANCH_ENVIRONMENTS,
+} from '../models/application.model.js';
 import { SEVERITIES, FINDING_STATUSES } from '../models/finding.model.js';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Must be a valid id');
@@ -90,51 +95,124 @@ const gitUrl = z
     'Repository URL must start with http(s)://, ssh:// or git@',
   );
 
-export const createProjectSchema = z.object({
-  key: z.string().min(2).max(24).regex(/^[A-Za-z0-9_-]+$/, 'Letters, digits, underscore and dash only').transform((v) => v.toUpperCase()),
+const branchName = z
+  .string()
+  .min(1)
+  .max(200)
+  .trim()
+  .refine(
+    (value) => !/[\s~^:?*\[\\]/.test(value) && !value.startsWith('-') && !value.endsWith('.lock'),
+    'Not a valid git branch name',
+  );
+
+export const contactSchema = z.object({
+  name: z.string().min(2).max(120).trim(),
+  email: z.string().email().toLowerCase(),
+  employeeId: z.string().max(40).trim().optional().default(''),
+  department: z.string().max(120).trim().optional().default(''),
+  designation: z.string().max(120).trim().optional().default(''),
+  phone: z.string().max(40).trim().optional().default(''),
+});
+
+export const branchInputSchema = z.object({
+  name: branchName,
+  environment: z.enum(BRANCH_ENVIRONMENTS).default('other'),
+  isDefault: z.boolean().default(false),
+  scanEnabled: z.boolean().default(true),
+  schedule: z.object({ enabled: z.boolean().default(false), cron: z.string().max(64).default('0 3 * * *') }).optional(),
+  notes: z.string().max(500).trim().optional().default(''),
+});
+
+export const createApplicationSchema = z.object({
+  key: z
+    .string()
+    .min(2)
+    .max(24)
+    .regex(/^[A-Za-z0-9_-]+$/, 'Letters, digits, underscore and dash only')
+    .transform((value) => value.toUpperCase()),
   name: z.string().min(2).max(160).trim(),
   description: z.string().max(2000).trim().optional().default(''),
-  repoUrl: gitUrl,
-  defaultBranch: z.string().min(1).max(120).default('main'),
+  applicationId: z.string().max(64).trim().optional().default(''),
   businessUnit: z.string().max(120).trim().optional().default(''),
   criticality: z.enum(CRITICALITIES).default('medium'),
   assessmentType: z.enum(ASSESSMENT_TYPES).default('internal'),
-  maintainerEmail: z.string().email().toLowerCase(),
+  environmentTier: z.string().max(60).trim().optional().default(''),
+
+  hod: contactSchema,
+  spoc: contactSchema,
+  backupSpoc: contactSchema.optional(),
+
+  repository: z.object({
+    url: gitUrl,
+    provider: z.enum(GIT_PROVIDERS).default('other'),
+    defaultBranch: branchName.default('main'),
+    visibility: z.enum(['private', 'internal', 'public']).default('private'),
+    credentialRef: z.string().max(120).trim().optional().default(''),
+  }),
+
+  // Branches may be registered up front; the default branch is added automatically.
+  branches: z.array(branchInputSchema).max(50).default([]),
   tags: z.array(z.string().max(40)).max(20).default([]),
-  credentialRef: z.string().max(120).optional().default(''),
-  schedule: z.object({ enabled: z.boolean().default(false), cron: z.string().max(64).default('0 3 * * *') }).optional(),
 });
 
-export const updateProjectSchema = createProjectSchema.partial().extend({ archived: z.boolean().optional() });
+export const updateApplicationSchema = createApplicationSchema
+  .partial()
+  .extend({ archived: z.boolean().optional() })
+  // Branches have their own endpoints so a partial update cannot silently drop history.
+  .omit({ branches: true });
 
-export const listProjectsSchema = z.object({
+export const listApplicationsSchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
   q: z.string().max(160).optional(),
   criticality: z.enum(CRITICALITIES).optional(),
+  businessUnit: z.string().max(120).optional(),
   tag: z.string().max(40).optional(),
   archived: z.enum(['true', 'false']).optional(),
   sort: z.string().max(40).optional(),
 });
 
+export const branchParamSchema = z.object({ id: objectId, branch: branchName });
+export const updateBranchSchema = branchInputSchema.partial().omit({ name: true });
+
 export const createScanSchema = z.object({
-  projectId: objectId,
-  branch: z.string().min(1).max(120).optional(),
+  applicationId: objectId,
+  branch: branchName.optional(),
+  // Scanning a branch that is not registered yet adds it to the application.
+  registerBranch: z.boolean().default(true),
   commitId: z.string().max(64).regex(/^[0-9a-fA-F]*$/, 'Commit must be a hex sha').optional().default(''),
   priority: z.coerce.number().int().min(1).max(10).optional(),
   trigger: z.enum(['manual', 'scheduled', 'api', 'webhook']).default('manual'),
 });
 
-export const bulkScanSchema = z.object({
-  projectIds: z.array(objectId).min(1).max(100),
-  trigger: z.enum(['manual', 'scheduled', 'api', 'webhook']).default('manual'),
-});
+/**
+ * Two fan-out shapes:
+ *   { applicationIds: [...] }              → default branch of each application
+ *   { applicationId, branches: [...] }     → several branches of one application
+ */
+export const bulkScanSchema = z
+  .object({
+    applicationIds: z.array(objectId).min(1).max(100).optional(),
+    applicationId: objectId.optional(),
+    branches: z.array(branchName).min(1).max(50).optional(),
+    allBranches: z.boolean().default(false),
+    trigger: z.enum(['manual', 'scheduled', 'api', 'webhook']).default('manual'),
+  })
+  .refine(
+    (value) => Boolean(value.applicationIds?.length) || Boolean(value.applicationId),
+    'Provide either applicationIds, or an applicationId with branches',
+  )
+  .refine(
+    (value) => !value.applicationId || value.allBranches || Boolean(value.branches?.length),
+    'Specify branches or set allBranches when scanning a single application',
+  );
 
 export const listScansSchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
   status: z.enum(['queued', 'running', 'completed', 'failed', 'cancelled']).optional(),
-  projectId: objectId.optional(),
+  applicationId: objectId.optional(),
+  branch: z.string().max(200).optional(),
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
   sort: z.string().max(40).optional(),
@@ -145,7 +223,8 @@ export const listFindingsSchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).optional(),
   severity: z.enum(SEVERITIES).optional(),
   status: z.enum(FINDING_STATUSES).optional(),
-  projectId: objectId.optional(),
+  applicationId: objectId.optional(),
+  branch: z.string().max(200).optional(),
   scanId: z.string().max(64).optional(),
   ruleId: z.string().max(80).optional(),
   q: z.string().max(160).optional(),

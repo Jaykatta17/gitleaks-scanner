@@ -5,8 +5,8 @@ import LoginPage from './pages/LoginPage.jsx';
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
-import ProjectsPage from './pages/ProjectsPage.jsx';
-import ProjectDetailPage from './pages/ProjectDetailPage.jsx';
+import ApplicationsPage from './pages/ApplicationsPage.jsx';
+import ApplicationDetailPage from './pages/ApplicationDetailPage.jsx';
 import ScansPage from './pages/ScansPage.jsx';
 import ScanDetailPage from './pages/ScanDetailPage.jsx';
 import FindingsPage from './pages/FindingsPage.jsx';
@@ -48,8 +48,8 @@ export const App = () => (
       }
     >
       <Route path="/" element={<DashboardPage />} />
-      <Route path="/projects" element={<ProjectsPage />} />
-      <Route path="/projects/:id" element={<ProjectDetailPage />} />
+      <Route path="/applications" element={<ApplicationsPage />} />
+      <Route path="/applications/:id" element={<ApplicationDetailPage />} />
       <Route path="/scans" element={<ScansPage />} />
       <Route path="/scans/:scanId" element={<ScanDetailPage />} />
       <Route path="/findings" element={<FindingsPage />} />

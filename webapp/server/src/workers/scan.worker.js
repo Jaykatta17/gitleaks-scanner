@@ -5,7 +5,7 @@ import { createWorkerConnection } from '../queues/connection.js';
 import { QUEUE_NAMES, enqueueEmail } from '../queues/index.js';
 import { Scan } from '../models/scan.model.js';
 import { Finding } from '../models/finding.model.js';
-import { Project } from '../models/project.model.js';
+import { Application } from '../models/application.model.js';
 import { User } from '../models/user.model.js';
 import { executeScan } from '../services/scanner.service.js';
 import { recordAudit } from '../services/audit.service.js';
@@ -19,9 +19,12 @@ const severityLabel = (summary) => {
   return 'CLEAN';
 };
 
-const notifyRecipients = async (project, scan) => {
+const notifyRecipients = async (application, scan) => {
   const recipients = new Set();
-  if (project?.maintainerEmail) recipients.add(project.maintainerEmail);
+  // The SPOC owns day-to-day remediation; the HOD is copied for accountability.
+  if (application?.spoc?.email) recipients.add(application.spoc.email);
+  if (application?.backupSpoc?.email) recipients.add(application.backupSpoc.email);
+  if (application?.hod?.email) recipients.add(application.hod.email);
   const subscribers = await User.find({
     status: 'active',
     role: { $in: ['admin', 'security_analyst'] },
@@ -60,7 +63,10 @@ export const processScanJob = async (job) => {
   scan.attempts = job.attemptsMade + 1;
   scan.logs.push({ level: 'info', message: `Worker picked up the job (attempt ${scan.attempts})` });
   await scan.save();
-  await Project.updateOne({ _id: scan.project }, { $set: { 'stats.lastScanStatus': 'running' } });
+  await Application.updateOne(
+    { _id: scan.application, 'branches.name': scan.branch },
+    { $set: { 'stats.lastScanStatus': 'running', 'branches.$.stats.lastScanStatus': 'running' } },
+  );
 
   try {
     const result = await executeScan(
@@ -75,8 +81,9 @@ export const processScanJob = async (job) => {
           ...finding,
           scan: scan._id,
           scanId: scan.scanId,
-          project: scan.project,
-          projectKey: scan.projectKey,
+          application: scan.application,
+          applicationKey: scan.applicationKey,
+          branch: scan.branch,
           status: 'open',
           firstSeenAt: now,
           lastSeenAt: now,
@@ -94,33 +101,57 @@ export const processScanJob = async (job) => {
     scan.logs.push(...logLines, { level: 'info', message: `Completed with ${result.summary.total} finding(s)` });
     await scan.save();
 
-    const project = await Project.findById(scan.project);
-    if (project) {
-      const [openCounts] = await Finding.aggregate([
-        { $match: { project: project._id, status: { $in: ['open', 'triaged'] } } },
-        {
-          $group: {
-            _id: null,
-            open: { $sum: 1 },
-            critical: { $sum: { $cond: [{ $eq: ['$severity', 'critical'] }, 1, 0] } },
+    const application = await Application.findById(scan.application);
+    if (application) {
+      // Counters are kept per branch as well as for the application as a whole,
+      // so one branch's exposure never hides behind another's.
+      const [overall, forBranch] = await Promise.all([
+        Finding.aggregate([
+          { $match: { application: application._id, status: { $in: ['open', 'triaged'] } } },
+          {
+            $group: {
+              _id: null,
+              open: { $sum: 1 },
+              critical: { $sum: { $cond: [{ $eq: ['$severity', 'critical'] }, 1, 0] } },
+            },
           },
-        },
+        ]),
+        Finding.aggregate([
+          { $match: { application: application._id, branch: scan.branch, status: { $in: ['open', 'triaged'] } } },
+          {
+            $group: {
+              _id: null,
+              open: { $sum: 1 },
+              critical: { $sum: { $cond: [{ $eq: ['$severity', 'critical'] }, 1, 0] } },
+            },
+          },
+        ]),
       ]);
-      project.stats.lastScanAt = scan.finishedAt;
-      project.stats.lastScanStatus = 'completed';
-      project.stats.openFindings = openCounts?.open || 0;
-      project.stats.criticalFindings = openCounts?.critical || 0;
-      await project.save();
+      application.stats.lastScanAt = scan.finishedAt;
+      application.stats.lastScanStatus = 'completed';
+      application.stats.openFindings = overall[0]?.open || 0;
+      application.stats.criticalFindings = overall[0]?.critical || 0;
+
+      const branch = application.findBranch(scan.branch);
+      if (branch) {
+        branch.stats.lastScanAt = scan.finishedAt;
+        branch.stats.lastScanStatus = 'completed';
+        branch.stats.lastScanId = scan.scanId;
+        branch.stats.openFindings = forBranch[0]?.open || 0;
+        branch.stats.criticalFindings = forBranch[0]?.critical || 0;
+      }
+      await application.save();
     }
 
-    const recipients = await notifyRecipients(project, scan);
+    const recipients = await notifyRecipients(application, scan);
     if (recipients.length) {
       void enqueueEmail({
         template: 'scanCompleted',
         to: recipients,
         data: {
           scanId: scan.scanId,
-          projectName: scan.projectName,
+          applicationName: scan.applicationName,
+          applicationKey: scan.applicationKey,
           repoUrl: scan.repoUrl,
           branch: scan.branch,
           commitId: scan.commitId,
@@ -134,17 +165,19 @@ export const processScanJob = async (job) => {
         },
       });
     }
-    if (result.summary.critical > 0 && project) {
+    if (result.summary.critical > 0 && application) {
       void enqueueEmail(
         {
           template: 'criticalFinding',
-          to: [...new Set([project.maintainerEmail, ...recipients])],
+          to: recipients,
           data: {
             count: result.summary.critical,
-            projectName: project.name,
+            applicationName: application.name,
+            applicationKey: application.key,
             scanId: scan.scanId,
             branch: scan.branch,
-            maintainerEmail: project.maintainerEmail,
+            spocEmail: application.spoc?.email,
+            hodEmail: application.hod?.email,
             samples: result.findings.filter((f) => f.severity === 'critical').slice(0, 5),
           },
         },
@@ -157,8 +190,8 @@ export const processScanJob = async (job) => {
       category: 'scan',
       outcome: 'success',
       actor: { username: scan.requestedByName || 'system', displayName: 'Scan worker' },
-      target: { type: 'scan', id: scan.scanId, name: scan.projectKey },
-      message: `Scan ${scan.scanId} completed for ${scan.projectKey}: ${result.summary.total} finding(s), ${result.summary.critical} critical`,
+      target: { type: 'scan', id: scan.scanId, name: `${scan.applicationKey}@${scan.branch}` },
+      message: `Scan ${scan.scanId} completed for ${scan.applicationKey} on branch ${scan.branch}: ${result.summary.total} finding(s), ${result.summary.critical} critical`,
       metadata: { ...result.summary, driver: result.driver, durationMs: scan.durationMs },
     });
     return { scanId: scan.scanId, ...result.summary };
@@ -175,15 +208,20 @@ export const processScanJob = async (job) => {
     await scan.save();
 
     if (finalAttempt) {
-      await Project.updateOne({ _id: scan.project }, { $set: { 'stats.lastScanStatus': 'failed' } });
-      const project = await Project.findById(scan.project).lean();
-      if (project?.maintainerEmail) {
+      await Application.updateOne(
+        { _id: scan.application, 'branches.name': scan.branch },
+        { $set: { 'stats.lastScanStatus': 'failed', 'branches.$.stats.lastScanStatus': 'failed' } },
+      );
+      const application = await Application.findById(scan.application).lean();
+      const failureRecipients = [application?.spoc?.email, application?.hod?.email].filter(Boolean);
+      if (failureRecipients.length) {
         void enqueueEmail({
           template: 'scanFailed',
-          to: project.maintainerEmail,
+          to: failureRecipients,
           data: {
             scanId: scan.scanId,
-            projectName: scan.projectName,
+            applicationName: scan.applicationName,
+            applicationKey: scan.applicationKey,
             repoUrl: scan.repoUrl,
             branch: scan.branch,
             stage: 'execute',
@@ -197,8 +235,8 @@ export const processScanJob = async (job) => {
         category: 'scan',
         outcome: 'failure',
         actor: { username: scan.requestedByName || 'system', displayName: 'Scan worker' },
-        target: { type: 'scan', id: scan.scanId, name: scan.projectKey },
-        message: `Scan ${scan.scanId} failed after ${scan.attempts} attempt(s): ${error.message}`,
+        target: { type: 'scan', id: scan.scanId, name: `${scan.applicationKey}@${scan.branch}` },
+        message: `Scan ${scan.scanId} failed for ${scan.applicationKey} on branch ${scan.branch} after ${scan.attempts} attempt(s): ${error.message}`,
         metadata: { error: error.message, attempts: scan.attempts },
       });
     }

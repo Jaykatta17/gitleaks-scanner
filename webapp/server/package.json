@@ -3,9 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Sentinel Console API — enterprise secret-scanning management platform",
+  "description": "Sentinel Console API \u2014 enterprise secret-scanning management platform",
   "main": "src/server.js",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
@@ -14,7 +16,8 @@
     "seed": "node src/scripts/seed.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "migrate:applications": "node src/scripts/migrate-projects-to-applications.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

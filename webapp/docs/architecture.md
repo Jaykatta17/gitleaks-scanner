@@ -17,7 +17,8 @@
              ┌──────────▼──┐  ┌─────▼─────┐  ┌──▼───────────────┐
              │ MongoDB     │  │ Redis     │  │ syslog collector │
              │ users,      │  │ BullMQ    │  │ RFC 5424 / 3164  │
-             │ projects,   │  │ queues    │  │ UDP or TCP       │
+             │ apps +      │  │ queues    │  │ UDP or TCP       │
+             │ branches,   │  │           │  │                  │
              │ scans,      │  └─────┬─────┘  └──────────────────┘
              │ findings,   │        │
              │ audit logs  │        │ jobs
@@ -60,12 +61,50 @@ re-synced from group membership at every sign-in (`LDAP_ROLE_MAPPINGS`).
 
 | Capability | admin | security_analyst | developer | viewer |
 |---|:--:|:--:|:--:|:--:|
-| View dashboard, projects, scans, findings | ✅ | ✅ | ✅ | ✅ |
-| Queue / cancel / retry scans | ✅ | ✅ | ✅ | — |
-| Onboard and edit projects | ✅ | ✅ | — | — |
+| View dashboard, applications, scans, findings | ✅ | ✅ | ✅ | ✅ |
+| Queue / cancel / retry scans (any branch) | ✅ | ✅ | ✅ | — |
+| Register and edit applications, manage branches | ✅ | ✅ | — | — |
 | Triage findings | ✅ | ✅ | — | — |
 | Read the audit trail | ✅ | ✅ | — | — |
 | Manage users and settings | ✅ | — | — | — |
+
+## Applications and branches
+
+An **application** is the unit of ownership and registration:
+
+```
+Application  key, name, inventory id, business unit, criticality, assessment type
+  ├── hod          name, email, employee id, designation, department, phone
+  ├── spoc         (same shape) — receives notifications; backupSpoc is optional
+  ├── repository   url, provider, defaultBranch, visibility, credentialRef
+  └── branches[]   name, environment, isDefault, scanEnabled, schedule, stats
+                   stats = lastScanId/At/Status, totalScans, open + critical findings
+```
+
+A **branch** is the unit of scanning. Scans and findings both carry
+`application` **and** `branch`, so `main` and `release/2.4` never share a
+verdict. Rules that hold at all times:
+
+* exactly one branch is the default, and `repository.defaultBranch` names it;
+* branch names are unique per application (enforced on save);
+* scanning a branch that is not registered **registers it**, so the branch list
+  always reflects what has actually been assessed (`registerBranch: false`
+  opts out and makes the request fail instead);
+* removing a branch stops tracking it — its scans and findings are retained as
+  evidence, and the removal is audited;
+* the default branch cannot be removed while it is the default.
+
+Three ways to launch scans:
+
+| Request | Result |
+|---|---|
+| `POST /scans { applicationId, branch }` | one scan; omitting `branch` uses the default |
+| `POST /scans/bulk { applicationId, branches: [...] }` | one scan per named branch |
+| `POST /scans/bulk { applicationId, allBranches: true }` | one scan per scannable branch (paused branches are skipped) |
+| `POST /scans/bulk { applicationIds: [...] }` | the default branch of each application |
+
+Scheduling lives on the branch, so an application can scan `main` nightly and a
+release branch weekly; the maintenance worker walks branch schedules hourly.
 
 ## Queues (Redis / BullMQ)
 
@@ -110,4 +149,6 @@ record. The syslog record is RFC 5424 by default:
 
 Findings are normalised, severity-classified, fingerprinted (rule + file + line +
 commit + hash of the secret) and stored with only a **redacted** preview of the
-secret. The raw value never leaves the worker process.
+secret. The raw value never leaves the worker process. Each finding records the
+branch it was found on, and the worker refreshes both the branch's counters and
+the application's totals when a scan completes.

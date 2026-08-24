@@ -4,6 +4,14 @@ import { startTestMongo, stopTestMongo, clearCollections } from './helpers/mongo
 
 // The queue is exercised separately; here we only assert that the API enqueues.
 const enqueued = { scans: [], emails: [] };
+
+const APPLICATION = {
+  key: 'PAY',
+  name: 'Payments API',
+  repository: { url: 'https://github.com/acme/payments.git', defaultBranch: 'main', provider: 'github' },
+  hod: { name: 'Meera Iyer', email: 'meera.iyer@corp.local', designation: 'Head of Payments' },
+  spoc: { name: 'Arjun Kumar', email: 'arjun.kumar@corp.local', phone: '+91 98450 11223' },
+};
 vi.mock('../src/queues/index.js', () => ({
   QUEUE_NAMES: { scan: 'scan', email: 'email', maintenance: 'maintenance' },
   getQueue: () => ({ getJob: async () => null, getJobCounts: async () => ({}) }),
@@ -33,7 +41,7 @@ if (!mongo) {
 describeIfMongo('API integration', () => {
   let app;
   let User;
-  let Project;
+  let Application;
   let AuditLog;
   const PASSWORD = 'Sentinel-Test-2026!';
 
@@ -59,7 +67,7 @@ describeIfMongo('API integration', () => {
     const { createApp } = await import('../src/app.js');
     app = createApp();
     ({ User } = await import('../src/models/user.model.js'));
-    ({ Project } = await import('../src/models/project.model.js'));
+    ({ Application } = await import('../src/models/application.model.js'));
     ({ AuditLog } = await import('../src/models/auditLog.model.js'));
   });
 
@@ -133,13 +141,13 @@ describeIfMongo('API integration', () => {
   });
 
   describe('authorisation', () => {
-    it('denies project creation to viewers and records the denial', async () => {
+    it('denies application registration to viewers and records the denial', async () => {
       await createUser({ username: 'viewer', email: 'viewer@sentinel.local', role: 'viewer' });
       const { body } = await signIn('viewer');
       const response = await request(app)
-        .post('/api/v1/projects')
+        .post('/api/v1/applications')
         .set('Authorization', `Bearer ${body.accessToken}`)
-        .send({ key: 'PAY', name: 'Payments', repoUrl: 'https://github.com/acme/pay.git', maintainerEmail: 'a@b.com' });
+        .send(APPLICATION);
 
       expect(response.status).toBe(403);
       const denial = await AuditLog.findOne({ action: 'authz.denied' });
@@ -147,65 +155,288 @@ describeIfMongo('API integration', () => {
       expect(denial.metadata.actualRole).toBe('viewer');
     });
 
-    it('lets an analyst create a project and audits it', async () => {
-      await createUser({ username: 'analyst', email: 'analyst@sentinel.local', role: 'security_analyst' });
-      const { body } = await signIn('analyst');
-      const response = await request(app)
-        .post('/api/v1/projects')
-        .set('Authorization', `Bearer ${body.accessToken}`)
-        .send({ key: 'pay', name: 'Payments API', repoUrl: 'https://github.com/acme/pay.git', maintainerEmail: 'lead@corp.local' });
-
-      expect(response.status).toBe(201);
-      expect(response.body.project.key).toBe('PAY');
-      expect(await AuditLog.exists({ action: 'project.created' })).toBeTruthy();
-    });
-
     it('stops the last administrator from being demoted', async () => {
       const admin = await createUser();
-      const other = await createUser({ username: 'dev', email: 'dev@sentinel.local', role: 'developer' });
+      await createUser({ username: 'dev', email: 'dev@sentinel.local', role: 'developer' });
       const { body } = await signIn('admin');
       const response = await request(app)
         .patch(`/api/v1/users/${admin._id}`)
         .set('Authorization', `Bearer ${body.accessToken}`)
         .send({ role: 'viewer' });
       expect(response.status).toBe(400);
-      expect(other.role).toBe('developer');
+    });
+  });
+
+  describe('application registration', () => {
+    const register = async (token, overrides = {}) =>
+      request(app)
+        .post('/api/v1/applications')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ ...APPLICATION, ...overrides });
+
+    it('records the application with its HOD, SPOC and repository details', async () => {
+      await createUser({ username: 'analyst', email: 'analyst@sentinel.local', role: 'security_analyst' });
+      const { body } = await signIn('analyst');
+      const response = await register(body.accessToken, { key: 'pay' });
+
+      expect(response.status).toBe(201);
+      expect(response.body.application).toMatchObject({
+        key: 'PAY',
+        hod: { name: 'Meera Iyer', email: 'meera.iyer@corp.local' },
+        spoc: { name: 'Arjun Kumar' },
+        repository: { url: 'https://github.com/acme/payments.git', provider: 'github' },
+      });
+
+      const audit = await AuditLog.findOne({ action: 'application.registered' });
+      expect(audit.metadata.hod).toBe('meera.iyer@corp.local');
+      expect(audit.metadata.spoc).toBe('arjun.kumar@corp.local');
+    });
+
+    it('always tracks the default branch, even when none were listed', async () => {
+      await createUser();
+      const { body } = await signIn('admin');
+      const response = await register(body.accessToken);
+      expect(response.body.application.branches).toHaveLength(1);
+      expect(response.body.application.branches[0]).toMatchObject({ name: 'main', isDefault: true });
+    });
+
+    it('registers the branches supplied at registration time', async () => {
+      await createUser();
+      const { body } = await signIn('admin');
+      const response = await register(body.accessToken, {
+        branches: [
+          { name: 'main', isDefault: true, environment: 'production' },
+          { name: 'release/2.4', environment: 'release' },
+          { name: 'develop', environment: 'development' },
+        ],
+      });
+      expect(response.body.application.branches.map((branch) => branch.name)).toEqual([
+        'main',
+        'release/2.4',
+        'develop',
+      ]);
+      expect(response.body.application.stats.branchCount).toBe(3);
+    });
+
+    it('does not invent a branch the caller did not ask for', async () => {
+      await createUser();
+      const { body } = await signIn('admin');
+      const response = await register(body.accessToken, {
+        repository: { url: 'https://github.com/acme/legacy.git', defaultBranch: 'main' },
+        branches: [{ name: 'trunk', isDefault: true }, { name: 'legacy/2019' }],
+      });
+      expect(response.body.application.branches.map((branch) => branch.name)).toEqual(['trunk', 'legacy/2019']);
+      // The repository's default follows the branch that was marked default.
+      expect(response.body.application.repository.defaultBranch).toBe('trunk');
+    });
+
+    it('rejects a duplicate application key', async () => {
+      await createUser();
+      const { body } = await signIn('admin');
+      await register(body.accessToken);
+      const duplicate = await register(body.accessToken, { name: 'Another' });
+      expect(duplicate.status).toBe(409);
+    });
+
+    it('rejects a registration without SPOC details', async () => {
+      await createUser();
+      const { body } = await signIn('admin');
+      const { spoc, ...withoutSpoc } = APPLICATION;
+      const response = await request(app)
+        .post('/api/v1/applications')
+        .set('Authorization', `Bearer ${body.accessToken}`)
+        .send(withoutSpoc);
+      expect(response.status).toBe(400);
+      expect(response.body.error.details.some((detail) => detail.field.startsWith('spoc'))).toBe(true);
+    });
+  });
+
+  describe('branch management', () => {
+    let token;
+    let applicationId;
+
+    beforeEach(async () => {
+      await createUser();
+      ({ body: { accessToken: token } } = await signIn('admin'));
+      const created = await request(app)
+        .post('/api/v1/applications')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ ...APPLICATION, branches: [{ name: 'main', isDefault: true }, { name: 'develop' }] });
+      applicationId = created.body.application._id;
+    });
+
+    it('adds a branch and audits it', async () => {
+      const response = await request(app)
+        .post(`/api/v1/applications/${applicationId}/branches`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'release/2.4', environment: 'release' });
+
+      expect(response.status).toBe(201);
+      expect(response.body.application.branches.map((branch) => branch.name)).toContain('release/2.4');
+      expect(await AuditLog.exists({ action: 'application.branch.added' })).toBeTruthy();
+    });
+
+    it('refuses a duplicate branch', async () => {
+      const response = await request(app)
+        .post(`/api/v1/applications/${applicationId}/branches`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'develop' });
+      expect(response.status).toBe(409);
+    });
+
+    it('moves the default flag to exactly one branch', async () => {
+      const response = await request(app)
+        .patch(`/api/v1/applications/${applicationId}/branches/develop`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ isDefault: true });
+
+      const defaults = response.body.application.branches.filter((branch) => branch.isDefault);
+      expect(defaults).toHaveLength(1);
+      expect(defaults[0].name).toBe('develop');
+      expect(response.body.application.repository.defaultBranch).toBe('develop');
+    });
+
+    it('will not remove the default branch', async () => {
+      const response = await request(app)
+        .delete(`/api/v1/applications/${applicationId}/branches/main`)
+        .set('Authorization', `Bearer ${token}`);
+      expect(response.status).toBe(400);
+    });
+
+    it('removes a non-default branch', async () => {
+      const response = await request(app)
+        .delete(`/api/v1/applications/${applicationId}/branches/develop`)
+        .set('Authorization', `Bearer ${token}`);
+      expect(response.status).toBe(200);
+      expect(response.body.application.branches.map((branch) => branch.name)).toEqual(['main']);
+    });
+
+    it('lists branches with their scan history', async () => {
+      await request(app)
+        .post('/api/v1/scans')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ applicationId, branch: 'develop' });
+
+      const response = await request(app)
+        .get(`/api/v1/applications/${applicationId}/branches`)
+        .set('Authorization', `Bearer ${token}`);
+
+      const develop = response.body.branches.find((branch) => branch.name === 'develop');
+      expect(develop.scanCount).toBe(1);
+      expect(develop.lastScan.status).toBe('queued');
     });
   });
 
   describe('scans', () => {
-    it('queues a scan and stores it as queued', async () => {
+    let token;
+    let applicationId;
+
+    beforeEach(async () => {
       await createUser();
-      const { body } = await signIn('admin');
-      const project = await Project.create({
-        key: 'PAY',
-        name: 'Payments API',
-        repoUrl: 'https://github.com/acme/pay.git',
-        maintainerEmail: 'lead@corp.local',
-      });
-
-      const response = await request(app)
-        .post('/api/v1/scans')
-        .set('Authorization', `Bearer ${body.accessToken}`)
-        .send({ projectId: String(project._id) });
-
-      expect(response.status).toBe(202);
-      expect(response.body.scan.status).toBe('queued');
-      expect(response.body.scan.scanId).toMatch(/^GLS-\d{8}-[A-Z0-9]{6}$/);
-      expect(enqueued.scans).toHaveLength(1);
-      expect(enqueued.scans[0].repoUrl).toBe(project.repoUrl);
-      expect(await AuditLog.exists({ action: 'scan.queued' })).toBeTruthy();
+      ({ body: { accessToken: token } } = await signIn('admin'));
+      const created = await request(app)
+        .post('/api/v1/applications')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          ...APPLICATION,
+          branches: [
+            { name: 'main', isDefault: true },
+            { name: 'release/2.4' },
+            { name: 'develop', scanEnabled: false },
+          ],
+        });
+      applicationId = created.body.application._id;
     });
 
-    it('rejects an invalid project id with a field-level error', async () => {
-      await createUser();
-      const { body } = await signIn('admin');
+    it('queues a scan on the default branch when none is given', async () => {
       const response = await request(app)
         .post('/api/v1/scans')
-        .set('Authorization', `Bearer ${body.accessToken}`)
-        .send({ projectId: 'not-an-id' });
+        .set('Authorization', `Bearer ${token}`)
+        .send({ applicationId });
+
+      expect(response.status).toBe(202);
+      expect(response.body.scan).toMatchObject({ status: 'queued', branch: 'main', applicationKey: 'PAY' });
+      expect(response.body.scan.scanId).toMatch(/^GLS-\d{8}-[A-Z0-9]{6}$/);
+      expect(enqueued.scans[0]).toMatchObject({ branch: 'main', spocEmail: 'arjun.kumar@corp.local' });
+    });
+
+    it('queues independent scans for different branches of the same application', async () => {
+      const first = await request(app)
+        .post('/api/v1/scans')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ applicationId, branch: 'main' });
+      const second = await request(app)
+        .post('/api/v1/scans')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ applicationId, branch: 'release/2.4' });
+
+      expect(first.body.scan.scanId).not.toBe(second.body.scan.scanId);
+      expect(enqueued.scans.map((job) => job.branch)).toEqual(['main', 'release/2.4']);
+
+      const listed = await request(app)
+        .get('/api/v1/scans')
+        .query({ applicationId, branch: 'release/2.4' })
+        .set('Authorization', `Bearer ${token}`);
+      expect(listed.body.items).toHaveLength(1);
+      expect(listed.body.items[0].branch).toBe('release/2.4');
+    });
+
+    it('fans out across selected branches in one request', async () => {
+      const response = await request(app)
+        .post('/api/v1/scans/bulk')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ applicationId, branches: ['main', 'release/2.4'] });
+
+      expect(response.status).toBe(202);
+      expect(response.body.results.every((result) => result.status === 'queued')).toBe(true);
+      expect(enqueued.scans).toHaveLength(2);
+    });
+
+    it('skips branches with scanning disabled when scanning them all', async () => {
+      const response = await request(app)
+        .post('/api/v1/scans/bulk')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ applicationId, allBranches: true });
+
+      expect(response.body.results.map((result) => result.branch)).toEqual(['main', 'release/2.4']);
+    });
+
+    it('registers a branch that is scanned ad hoc', async () => {
+      await request(app)
+        .post('/api/v1/scans')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ applicationId, branch: 'hotfix/urgent' });
+
+      const application = await Application.findById(applicationId);
+      expect(application.findBranch('hotfix/urgent')).toBeTruthy();
+    });
+
+    it('refuses an ad-hoc branch when registration is turned off', async () => {
+      const response = await request(app)
+        .post('/api/v1/scans')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ applicationId, branch: 'nope', registerBranch: false });
       expect(response.status).toBe(400);
-      expect(response.body.error.details[0].field).toBe('projectId');
+    });
+
+    it('tracks queued counters per branch', async () => {
+      await request(app)
+        .post('/api/v1/scans')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ applicationId, branch: 'release/2.4' });
+
+      const application = await Application.findById(applicationId);
+      expect(application.findBranch('release/2.4').stats.totalScans).toBe(1);
+      expect(application.findBranch('main').stats.totalScans).toBe(0);
+    });
+
+    it('rejects an invalid application id with a field-level error', async () => {
+      const response = await request(app)
+        .post('/api/v1/scans')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ applicationId: 'not-an-id' });
+      expect(response.status).toBe(400);
+      expect(response.body.error.details[0].field).toBe('applicationId');
     });
   });
 

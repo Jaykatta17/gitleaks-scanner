@@ -93,10 +93,10 @@ export const TEMPLATES = {
   }),
 
   scanCompleted: (data) => ({
-    subject: `[${data.severityLabel}] Scan ${data.scanId} — ${data.projectName}`,
+    subject: `[${data.severityLabel}] ${data.applicationKey || ''} ${data.branch} — scan ${data.scanId}`.trim(),
     html: layout({
       title: 'Secret scan completed',
-      intro: `Scan <strong>${escapeHtml(data.scanId)}</strong> for <strong>${escapeHtml(data.projectName)}</strong> finished with <strong>${escapeHtml(data.total)}</strong> finding(s).`,
+      intro: `Scan <strong>${escapeHtml(data.scanId)}</strong> of <strong>${escapeHtml(data.applicationName)}</strong> on branch <strong>${escapeHtml(data.branch)}</strong> finished with <strong>${escapeHtml(data.total)}</strong> finding(s).`,
       body: table([
         ['Repository', data.repoUrl],
         ['Branch', data.branch],
@@ -112,10 +112,10 @@ export const TEMPLATES = {
   }),
 
   scanFailed: (data) => ({
-    subject: `[FAILED] Scan ${data.scanId} — ${data.projectName}`,
+    subject: `[FAILED] ${data.applicationKey || ''} ${data.branch} — scan ${data.scanId}`.trim(),
     html: layout({
       title: 'Secret scan failed',
-      intro: `Scan <strong>${escapeHtml(data.scanId)}</strong> for <strong>${escapeHtml(data.projectName)}</strong> could not be completed.`,
+      intro: `Scan <strong>${escapeHtml(data.scanId)}</strong> of <strong>${escapeHtml(data.applicationName)}</strong> on branch <strong>${escapeHtml(data.branch)}</strong> could not be completed.`,
       body: table([
         ['Repository', data.repoUrl],
         ['Branch', data.branch],
@@ -128,14 +128,16 @@ export const TEMPLATES = {
   }),
 
   criticalFinding: (data) => ({
-    subject: `[CRITICAL] ${data.count} critical secret(s) in ${data.projectName}`,
+    subject: `[CRITICAL] ${data.count} critical secret(s) in ${data.applicationName} (${data.branch})`,
     html: layout({
       title: 'Critical secrets detected',
-      intro: `<strong>${escapeHtml(data.count)}</strong> critical finding(s) were detected in <strong>${escapeHtml(data.projectName)}</strong>. Rotate the affected credentials immediately.`,
+      intro: `<strong>${escapeHtml(data.count)}</strong> critical finding(s) were detected in <strong>${escapeHtml(data.applicationName)}</strong> on branch <strong>${escapeHtml(data.branch)}</strong>. Rotate the affected credentials immediately.`,
       body: `${table([
+        ['Application', `${data.applicationKey || ''} ${data.applicationName}`.trim()],
         ['Scan', data.scanId],
         ['Branch', data.branch],
-        ['Maintainer', data.maintainerEmail],
+        ['SPOC', data.spocEmail],
+        ['Head of department', data.hodEmail],
       ])}
       <ul style="font-size:14px;line-height:1.7;padding-left:18px;margin:12px 0 0">
         ${(data.samples || []).map((sample) => `<li><code>${escapeHtml(sample.file)}:${escapeHtml(sample.startLine)}</code> — ${escapeHtml(sample.ruleId)}</li>`).join('')}

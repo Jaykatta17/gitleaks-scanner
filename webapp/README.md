@@ -1,7 +1,12 @@
 # Sentinel Console
 
-An enterprise web application for running and governing repository secret scans —
-the operational front end for the gitleaks scanner in this repository.
+An enterprise web application for registering applications and governing their
+repository secret scans — the operational front end for the gitleaks scanner in
+this repository.
+
+Applications are registered with their **head of department**, **SPOC** and **git
+repository**, and each one can be scanned on **as many branches as it has** —
+every branch keeps its own scan history, findings and counters.
 
 **Stack:** React 18 + Material UI 6 (light glassmorphic theme) · Node.js 22 + Express ·
 MongoDB (Mongoose) · Redis (BullMQ queues) · LDAP/AD · SMTP · RFC 5424 syslog auditing.
@@ -11,12 +16,12 @@ webapp/
 ├── server/            Express API, workers, models, services
 │   ├── src/
 │   │   ├── config/    env, structured logger, syslog client
-│   │   ├── models/    User, Project, Scan, Finding, AuditLog, tokens, settings
+│   │   ├── models/    User, Application (+branches), Scan, Finding, AuditLog, tokens, settings
 │   │   ├── services/  ldap, mail, audit, tokens, scanner engine, scan orchestration
 │   │   ├── queues/    Redis connection + BullMQ queues
 │   │   ├── workers/   scan, email, maintenance workers
 │   │   ├── routes/    /api/v1 surface
-│   │   └── scripts/   seed
+│   │   └── scripts/   seed, project→application migration
 │   └── tests/         vitest unit + HTTP + API integration suites
 ├── web/               React single-page console (Vite)
 ├── docs/              architecture and operations runbook
@@ -64,10 +69,11 @@ docker compose exec api npm run seed
 |---|---|
 | **Sign-in** | local password **or** corporate LDAP/AD, optional TOTP MFA with recovery codes, lockout, password history and reset-by-email |
 | **Access** | four roles — administrator, security analyst, developer, viewer — enforced on every route; LDAP groups map to roles |
-| **Projects** | onboard repositories with owner, business unit, criticality, tags and an optional nightly schedule |
-| **Scans** | queued through Redis, executed by workers (`mock`/`native`/`docker` gitleaks drivers), with live status, logs, cancel and retry |
-| **Findings** | severity-classified, fingerprinted, **redacted** secrets; triage workflow, bulk actions and CSV export |
-| **Notifications** | SMTP through a queued worker: welcome, password reset/changed, scan completed/failed, critical finding, security alerts |
+| **Applications** | register with key, inventory id, business unit, criticality, HOD and SPOC (plus optional backup SPOC), and git repository (provider, visibility, credential reference) |
+| **Branches** | register any number of branches per application, each with its own environment, nightly schedule, scan history and finding counters; add, pause, re-default or stop tracking at any time |
+| **Scans** | run per branch — one branch, several selected branches, or every branch at once — queued through Redis and executed by workers (`mock`/`native`/`docker` gitleaks drivers), with live status, logs, cancel and retry |
+| **Findings** | severity-classified, fingerprinted, **redacted** secrets, attributed to an application *and* a branch; triage workflow, bulk actions and CSV export |
+| **Notifications** | SMTP through a queued worker: welcome, password reset/changed, scan completed/failed (naming the branch), critical finding, security alerts — addressed to the SPOC with the HOD copied |
 | **Auditing** | every mutating action persisted to MongoDB **and** mirrored to syslog (RFC 5424/3164, UDP/TCP) with structured data, TTL retention and evidence export |
 | **Operations** | liveness/readiness probes, dependency health, queue depths, rate limiting, correlation ids on every request and log line |
 
@@ -93,6 +99,21 @@ SCAN_DRIVER=docker
 ```bash
 cd webapp/server && npm test
 ```
+
+### Upgrading an existing install
+
+Installations created before applications replaced projects can migrate in place:
+
+```bash
+cd webapp/server
+npm run migrate:applications -- --dry-run   # report what would change
+npm run migrate:applications                # move projects → applications
+```
+
+The maintainer becomes the SPOC (and provisionally the HOD — correct it in the
+console), the repository fields fold into the repository block, the default
+branch is registered, and scans and findings are repointed and back-filled with
+their branch.
 
 The unit and HTTP suites run anywhere. The API integration suite needs a real
 MongoDB: set `MONGO_TEST_URI=mongodb://127.0.0.1:27017/sentinel-test` (or let

@@ -62,7 +62,7 @@ describe('HTTP surface', () => {
   });
 
   it('requires authentication on protected routes', async () => {
-    for (const path of ['/api/v1/projects', '/api/v1/scans', '/api/v1/findings', '/api/v1/audit-logs', '/api/v1/users']) {
+    for (const path of ['/api/v1/applications', '/api/v1/scans', '/api/v1/findings', '/api/v1/audit-logs', '/api/v1/users']) {
       // eslint-disable-next-line no-await-in-loop
       const response = await request(app).get(path);
       expect(response.status).toBe(401);
@@ -71,7 +71,7 @@ describe('HTTP surface', () => {
   });
 
   it('rejects a forged bearer token', async () => {
-    const response = await request(app).get('/api/v1/projects').set('Authorization', 'Bearer not.a.jwt');
+    const response = await request(app).get('/api/v1/applications').set('Authorization', 'Bearer not.a.jwt');
     expect(response.status).toBe(401);
     expect(response.body.error.code).toBe('invalid_token');
   });

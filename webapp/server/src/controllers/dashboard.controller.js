@@ -1,5 +1,5 @@
 import dayjs from 'dayjs';
-import { Project } from '../models/project.model.js';
+import { Application } from '../models/application.model.js';
 import { Scan } from '../models/scan.model.js';
 import { Finding } from '../models/finding.model.js';
 import { AuditLog } from '../models/auditLog.model.js';
@@ -13,20 +13,20 @@ export const overview = asyncHandler(async (req, res) => {
   const since = dayjs().subtract(days, 'day').startOf('day').toDate();
 
   const [
-    projectCount,
-    activeProjects,
+    applicationCount,
+    activeApplications,
     scanCounts,
     severityCounts,
     statusCounts,
     trend,
-    topProjects,
+    topApplications,
     topRules,
     recentScans,
     mttr,
     queues,
   ] = await Promise.all([
-    Project.countDocuments({}),
-    Project.countDocuments({ archived: false }),
+    Application.countDocuments({}),
+    Application.countDocuments({ archived: false }),
     Scan.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
     Finding.aggregate([
       { $match: { status: { $in: OPEN_STATUSES } } },
@@ -51,7 +51,7 @@ export const overview = asyncHandler(async (req, res) => {
       { $match: { status: { $in: OPEN_STATUSES } } },
       {
         $group: {
-          _id: { projectKey: '$projectKey', project: '$project' },
+          _id: { applicationKey: '$applicationKey', application: '$application' },
           open: { $sum: 1 },
           critical: { $sum: { $cond: [{ $eq: ['$severity', 'critical'] }, 1, 0] } },
         },
@@ -80,7 +80,11 @@ export const overview = asyncHandler(async (req, res) => {
   res.json({
     generatedAt: new Date().toISOString(),
     windowDays: days,
-    projects: { total: projectCount, active: activeProjects, archived: projectCount - activeProjects },
+    applications: {
+      total: applicationCount,
+      active: activeApplications,
+      archived: applicationCount - activeApplications,
+    },
     scans: { byStatus: asMap(scanCounts), recent: recentScans },
     findings: {
       openBySeverity: severity,
@@ -90,7 +94,12 @@ export const overview = asyncHandler(async (req, res) => {
       remediatedCount: mttr[0]?.count || 0,
     },
     trend: trend.map(({ _id, ...rest }) => ({ date: _id, ...rest })),
-    topProjects: topProjects.map(({ _id, open, critical }) => ({ projectKey: _id.projectKey, projectId: _id.project, open, critical })),
+    topApplications: topApplications.map(({ _id, open, critical }) => ({
+      applicationKey: _id.applicationKey,
+      applicationId: _id.application,
+      open,
+      critical,
+    })),
     topRules: topRules.map(({ _id, count }) => ({ ruleId: _id, count })),
     queues,
   });

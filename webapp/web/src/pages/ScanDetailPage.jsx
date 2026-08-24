@@ -71,8 +71,12 @@ export const ScanDetailPage = () => {
   return (
     <Box>
       <PageHeader
-        breadcrumbs={[{ label: 'Scans', to: '/scans' }, { label: scan.scanId }]}
-        title={`${scan.projectKey} · ${scan.branch}`}
+        breadcrumbs={[
+          { label: 'Scans', to: '/scans' },
+          { label: scan.applicationKey, to: `/scans?applicationId=${scan.application}` },
+          { label: scan.scanId },
+        ]}
+        title={`${scan.applicationKey} · ${scan.branch}`}
         description={`${scan.repoUrl}${scan.commitId ? ` @ ${scan.commitId}` : ''}`}
         actions={
           <>

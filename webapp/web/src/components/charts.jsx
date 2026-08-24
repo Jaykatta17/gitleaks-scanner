@@ -173,14 +173,14 @@ export const SeverityBarChart = ({ counts = {}, height = 240 }) => {
 };
 
 /** Ranked magnitude for one measure — a single hue, so no legend is needed. */
-export const TopProjectsChart = ({ data = [], height = 260 }) => (
+export const TopApplicationsChart = ({ data = [], height = 260 }) => (
   <ResponsiveContainer width="100%" height={height}>
     <BarChart data={data} layout="vertical" margin={{ top: 4, right: 40, left: 8, bottom: 0 }} barCategoryGap={8}>
       <CartesianGrid stroke={palette.ink.grid} horizontal={false} />
       <XAxis type="number" tick={axisStyle} tickLine={false} axisLine={false} allowDecimals={false} />
       <YAxis
         type="category"
-        dataKey="projectKey"
+        dataKey="applicationKey"
         tick={{ ...axisStyle, fontWeight: 600 }}
         tickLine={false}
         axisLine={false}

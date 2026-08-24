@@ -5,11 +5,11 @@ export const SCAN_STATUSES = ['queued', 'running', 'completed', 'failed', 'cance
 const scanSchema = new mongoose.Schema(
   {
     scanId: { type: String, required: true, unique: true, index: true },
-    project: { type: mongoose.Schema.Types.ObjectId, ref: 'Project', required: true, index: true },
-    projectKey: { type: String, required: true, index: true },
-    projectName: { type: String, required: true },
+    application: { type: mongoose.Schema.Types.ObjectId, ref: 'Application', required: true, index: true },
+    applicationKey: { type: String, required: true, index: true },
+    applicationName: { type: String, required: true },
     repoUrl: { type: String, required: true },
-    branch: { type: String, required: true },
+    branch: { type: String, required: true, index: true },
     commitId: { type: String, default: '' },
     status: { type: String, enum: SCAN_STATUSES, default: 'queued', index: true },
     trigger: { type: String, enum: ['manual', 'scheduled', 'api', 'webhook'], default: 'manual' },
@@ -50,7 +50,9 @@ const scanSchema = new mongoose.Schema(
   { timestamps: true, toJSON: { virtuals: true } },
 );
 
-scanSchema.index({ project: 1, createdAt: -1 });
+scanSchema.index({ application: 1, createdAt: -1 });
+// The console lists scan history per application *and* per branch.
+scanSchema.index({ application: 1, branch: 1, createdAt: -1 });
 scanSchema.index({ status: 1, createdAt: -1 });
 
 export const Scan = mongoose.model('Scan', scanSchema);

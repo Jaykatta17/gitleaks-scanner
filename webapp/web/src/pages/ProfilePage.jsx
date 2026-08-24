@@ -148,7 +148,7 @@ export const ProfilePage = () => {
                 NOTIFICATIONS
               </Typography>
               {[
-                ['scanCompleted', 'Scan completed for projects I can see'],
+                ['scanCompleted', 'Scan completed for applications I can see'],
                 ['criticalFinding', 'Critical secret detected'],
                 ['weeklyDigest', 'Weekly exposure digest'],
               ].map(([key, label]) => (

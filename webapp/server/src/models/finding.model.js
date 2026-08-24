@@ -8,8 +8,9 @@ const findingSchema = new mongoose.Schema(
     fingerprint: { type: String, required: true, index: true },
     scan: { type: mongoose.Schema.Types.ObjectId, ref: 'Scan', required: true, index: true },
     scanId: { type: String, required: true, index: true },
-    project: { type: mongoose.Schema.Types.ObjectId, ref: 'Project', required: true, index: true },
-    projectKey: { type: String, required: true, index: true },
+    application: { type: mongoose.Schema.Types.ObjectId, ref: 'Application', required: true, index: true },
+    applicationKey: { type: String, required: true, index: true },
+    branch: { type: String, required: true, index: true },
     ruleId: { type: String, required: true, index: true },
     description: { type: String, default: '' },
     severity: { type: String, enum: SEVERITIES, default: 'medium', index: true },
@@ -38,8 +39,8 @@ const findingSchema = new mongoose.Schema(
   { timestamps: true, toJSON: { virtuals: true } },
 );
 
-findingSchema.index({ project: 1, fingerprint: 1 }, { unique: false });
-findingSchema.index({ projectKey: 1, severity: 1, status: 1 });
+findingSchema.index({ application: 1, branch: 1, fingerprint: 1 });
+findingSchema.index({ applicationKey: 1, severity: 1, status: 1 });
 findingSchema.index({ createdAt: -1 });
 
 export const Finding = mongoose.model('Finding', findingSchema);

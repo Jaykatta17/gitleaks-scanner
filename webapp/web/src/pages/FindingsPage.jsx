@@ -50,7 +50,8 @@ export const FindingsPage = () => {
     () => ({
       severity: params.get('severity') || '',
       status: params.get('status') || '',
-      projectId: params.get('projectId') || '',
+      applicationId: params.get('applicationId') || '',
+      branch: params.get('branch') || '',
       scanId: params.get('scanId') || '',
       q: params.get('q') || '',
     }),
@@ -61,6 +62,8 @@ export const FindingsPage = () => {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);
     else next.delete(key);
+    // Changing the application invalidates whatever branch was selected.
+    if (key === 'applicationId') next.delete('branch');
     setParams(next, { replace: true });
     setPaginationModel((model) => ({ ...model, page: 0 }));
   };
@@ -76,7 +79,8 @@ export const FindingsPage = () => {
     [filters, paginationModel.page, paginationModel.pageSize],
   );
 
-  const { data: projects } = useAsync(() => api.projects({ limit: 100 }), []);
+  const { data: applications } = useAsync(() => api.applications({ limit: 100 }), []);
+  const selectedApplication = (applications?.items || []).find((item) => item._id === filters.applicationId);
 
   const updateStatus = async (status) => {
     try {
@@ -120,7 +124,13 @@ export const FindingsPage = () => {
       renderCell: ({ value }) => <SeverityChip severity={value} />,
       sortComparator: (a, b) => severityOrder.indexOf(a) - severityOrder.indexOf(b),
     },
-    { field: 'projectKey', headerName: 'Project', width: 110 },
+    { field: 'applicationKey', headerName: 'Application', width: 120 },
+    {
+      field: 'branch',
+      headerName: 'Branch',
+      width: 150,
+      renderCell: ({ value }) => <Chip size="small" variant="outlined" label={value || '—'} />,
+    },
     { field: 'ruleId', headerName: 'Rule', width: 170 },
     {
       field: 'file',
@@ -161,7 +171,7 @@ export const FindingsPage = () => {
     <Box>
       <PageHeader
         title="Findings"
-        description="Triage queue across every project. Secrets are stored redacted — rotate the credential first, then remove it from history."
+        description="Triage queue across every application and branch. Secrets are stored redacted — rotate the credential first, then remove it from history."
         actions={
           <Button variant="outlined" startIcon={<DownloadIcon />} onClick={exportCsv}>
             Export CSV
@@ -207,17 +217,40 @@ export const FindingsPage = () => {
             </TextField>
           </Grid>
           <Grid item xs={12} md={3}>
-            <TextField select fullWidth label="Project" value={filters.projectId} onChange={(event) => setFilter('projectId', event.target.value)}>
-              <MenuItem value="">All projects</MenuItem>
-              {(projects?.items || []).map((project) => (
-                <MenuItem key={project._id} value={project._id}>
-                  {project.key} — {project.name}
+            <TextField
+              select
+              fullWidth
+              label="Application"
+              value={filters.applicationId}
+              onChange={(event) => setFilter('applicationId', event.target.value)}
+            >
+              <MenuItem value="">All applications</MenuItem>
+              {(applications?.items || []).map((application) => (
+                <MenuItem key={application._id} value={application._id}>
+                  {application.key} — {application.name}
                 </MenuItem>
               ))}
             </TextField>
           </Grid>
-          <Grid item xs={12} md={2}>
-            {filters.scanId && <Chip label={`Scan ${filters.scanId}`} onDelete={() => setFilter('scanId', '')} sx={{ mt: 0.5 }} />}
+          <Grid item xs={6} md={2}>
+            <TextField
+              select
+              fullWidth
+              label="Branch"
+              value={filters.branch}
+              onChange={(event) => setFilter('branch', event.target.value)}
+              disabled={!selectedApplication}
+            >
+              <MenuItem value="">All branches</MenuItem>
+              {(selectedApplication?.branches || []).map((branch) => (
+                <MenuItem key={branch.name} value={branch.name}>
+                  {branch.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid item xs={6} md={12}>
+            {filters.scanId && <Chip label={`Scan ${filters.scanId}`} onDelete={() => setFilter('scanId', '')} />}
           </Grid>
         </Grid>
 
@@ -283,7 +316,8 @@ export const FindingsPage = () => {
           {detail && (
             <Stack spacing={1.5}>
               {[
-                ['Project', detail.projectKey],
+                ['Application', detail.applicationKey],
+                ['Branch', detail.branch],
                 ['Scan', detail.scanId],
                 ['Location', `${detail.file}:${detail.startLine}`],
                 ['Commit', detail.commit || '—'],

@@ -4,8 +4,8 @@ import { recordAudit } from '../services/audit.service.js';
 /**
  * Route-level audit decorator. Attach to any mutating endpoint:
  *
- *   router.post('/', auditAction('project.created', 'project_management', {
- *     target: (req, res) => ({ type: 'project', id: res.locals.project?.id, name: req.body.name }),
+ *   router.post('/', auditAction('application.registered', 'application_management', {
+ *     target: (req, res) => ({ type: 'application', id: res.locals.application?.id, name: req.body.key }),
  *   }), handler)
  *
  * The event is written after the response is flushed, with the real status code,

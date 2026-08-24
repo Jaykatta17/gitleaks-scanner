@@ -83,12 +83,19 @@ export const api = {
   dashboard: (params) => client.get('/dashboard/overview', { params }).then((r) => r.data),
   activity: (params) => client.get('/dashboard/activity', { params }).then((r) => r.data),
 
-  projects: (params) => client.get('/projects', { params }).then((r) => r.data),
-  project: (id) => client.get(`/projects/${id}`).then((r) => r.data),
-  projectStats: (id) => client.get(`/projects/${id}/stats`).then((r) => r.data),
-  createProject: (payload) => client.post('/projects', payload).then((r) => r.data),
-  updateProject: (id, payload) => client.patch(`/projects/${id}`, payload).then((r) => r.data),
-  archiveProject: (id) => client.delete(`/projects/${id}`).then((r) => r.data),
+  applications: (params) => client.get('/applications', { params }).then((r) => r.data),
+  application: (id) => client.get(`/applications/${id}`).then((r) => r.data),
+  applicationStats: (id) => client.get(`/applications/${id}/stats`).then((r) => r.data),
+  createApplication: (payload) => client.post('/applications', payload).then((r) => r.data),
+  updateApplication: (id, payload) => client.patch(`/applications/${id}`, payload).then((r) => r.data),
+  archiveApplication: (id) => client.delete(`/applications/${id}`).then((r) => r.data),
+
+  branches: (id) => client.get(`/applications/${id}/branches`).then((r) => r.data),
+  addBranch: (id, payload) => client.post(`/applications/${id}/branches`, payload).then((r) => r.data),
+  updateBranch: (id, branch, payload) =>
+    client.patch(`/applications/${id}/branches/${encodeURIComponent(branch)}`, payload).then((r) => r.data),
+  removeBranch: (id, branch) =>
+    client.delete(`/applications/${id}/branches/${encodeURIComponent(branch)}`).then((r) => r.data),
 
   scans: (params) => client.get('/scans', { params }).then((r) => r.data),
   scan: (scanId) => client.get(`/scans/${scanId}`).then((r) => r.data),

@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   loginSchema,
   passwordSchema,
-  createProjectSchema,
+  createApplicationSchema,
+  branchInputSchema,
+  bulkScanSchema,
   createScanSchema,
   listFindingsSchema,
   createUserSchema,
@@ -40,47 +42,135 @@ describe('login payload', () => {
   });
 });
 
-describe('project payload', () => {
-  it('upper-cases the key and defaults the branch', () => {
-    const project = createProjectSchema.parse({
-      key: 'pay',
-      name: 'Payments API',
-      repoUrl: 'https://github.com/acme/payments.git',
-      maintainerEmail: 'Lead@Corp.local',
+const validApplication = {
+  key: 'pay',
+  name: 'Payments API',
+  repository: { url: 'https://github.com/acme/payments.git' },
+  hod: { name: 'Meera Iyer', email: 'Meera.Iyer@Corp.local' },
+  spoc: { name: 'Arjun Kumar', email: 'arjun.kumar@corp.local' },
+};
+
+describe('application registration payload', () => {
+  it('upper-cases the key, defaults the branch and normalises contact emails', () => {
+    const application = createApplicationSchema.parse(validApplication);
+    expect(application.key).toBe('PAY');
+    expect(application.repository.defaultBranch).toBe('main');
+    expect(application.hod.email).toBe('meera.iyer@corp.local');
+    expect(application.criticality).toBe('medium');
+  });
+
+  it('requires both a head of department and a SPOC', () => {
+    const { hod, ...withoutHod } = validApplication;
+    const { spoc, ...withoutSpoc } = validApplication;
+    expect(createApplicationSchema.safeParse(withoutHod).success).toBe(false);
+    expect(createApplicationSchema.safeParse(withoutSpoc).success).toBe(false);
+  });
+
+  it('rejects a contact without a usable email', () => {
+    const result = createApplicationSchema.safeParse({
+      ...validApplication,
+      spoc: { name: 'No Mail', email: 'not-an-email' },
     });
-    expect(project.key).toBe('PAY');
-    expect(project.defaultBranch).toBe('main');
-    expect(project.maintainerEmail).toBe('lead@corp.local');
+    expect(result.success).toBe(false);
+    expect(result.error.issues[0].path).toEqual(['spoc', 'email']);
+  });
+
+  it('accepts an optional backup SPOC', () => {
+    const application = createApplicationSchema.parse({
+      ...validApplication,
+      backupSpoc: { name: 'Neha Verma', email: 'neha@corp.local', phone: '+91 98450 11223' },
+    });
+    expect(application.backupSpoc.phone).toBe('+91 98450 11223');
   });
 
   it('rejects a repository URL with an unsupported scheme', () => {
-    const result = createProjectSchema.safeParse({
-      key: 'XY',
-      name: 'Repo XY',
-      repoUrl: 'file:///etc/passwd',
-      maintainerEmail: 'a@b.com',
+    const result = createApplicationSchema.safeParse({
+      ...validApplication,
+      repository: { url: 'file:///etc/passwd' },
     });
     expect(result.success).toBe(false);
   });
 
   it('accepts ssh and scp-style git URLs', () => {
-    for (const repoUrl of ['git@github.com:acme/x.git', 'ssh://git@github.com/acme/x.git']) {
-      expect(
-        createProjectSchema.safeParse({ key: 'XY', name: 'Repo XY', repoUrl, maintainerEmail: 'a@b.com' }).success,
-      ).toBe(true);
+    for (const url of ['git@github.com:acme/x.git', 'ssh://git@github.com/acme/x.git']) {
+      expect(createApplicationSchema.safeParse({ ...validApplication, repository: { url } }).success).toBe(true);
+    }
+  });
+
+  it('takes a list of branches to register up front', () => {
+    const application = createApplicationSchema.parse({
+      ...validApplication,
+      branches: [
+        { name: 'main', isDefault: true, environment: 'production' },
+        { name: 'release/2.4', environment: 'release' },
+        { name: 'develop' },
+      ],
+    });
+    expect(application.branches.map((branch) => branch.name)).toEqual(['main', 'release/2.4', 'develop']);
+    expect(application.branches[1].scanEnabled).toBe(true);
+  });
+});
+
+describe('branch names', () => {
+  it('accepts the shapes git actually allows', () => {
+    for (const name of ['main', 'develop', 'release/2.4', 'feature/JIRA-123_add-auth', 'hotfix.1']) {
+      expect(branchInputSchema.safeParse({ name }).success).toBe(true);
+    }
+  });
+
+  it('rejects names git would refuse or that could smuggle arguments', () => {
+    for (const name of ['has space', 'tilde~1', 'caret^', 'colon:name', 'star*', 'question?', '-leading-dash', 'x.lock', 'back\\slash']) {
+      expect(branchInputSchema.safeParse({ name }).success).toBe(false);
     }
   });
 });
 
+describe('bulk scan payload', () => {
+  const id = '651f1f77bcf86cd799439011';
+
+  it('accepts a list of applications', () => {
+    expect(bulkScanSchema.safeParse({ applicationIds: [id] }).success).toBe(true);
+  });
+
+  it('accepts several branches of one application', () => {
+    const parsed = bulkScanSchema.parse({ applicationId: id, branches: ['main', 'release/2.4'] });
+    expect(parsed.branches).toHaveLength(2);
+  });
+
+  it('accepts an all-branches request', () => {
+    expect(bulkScanSchema.safeParse({ applicationId: id, allBranches: true }).success).toBe(true);
+  });
+
+  it('rejects a single application with no branch selection', () => {
+    expect(bulkScanSchema.safeParse({ applicationId: id }).success).toBe(false);
+  });
+
+  it('rejects an empty request', () => {
+    expect(bulkScanSchema.safeParse({}).success).toBe(false);
+  });
+});
+
 describe('scan and finding queries', () => {
-  it('requires a valid object id for the project', () => {
-    expect(createScanSchema.safeParse({ projectId: 'nope' }).success).toBe(false);
-    expect(createScanSchema.safeParse({ projectId: '651f1f77bcf86cd799439011' }).success).toBe(true);
+  it('requires a valid object id for the application', () => {
+    expect(createScanSchema.safeParse({ applicationId: 'nope' }).success).toBe(false);
+    expect(createScanSchema.safeParse({ applicationId: '651f1f77bcf86cd799439011' }).success).toBe(true);
+  });
+
+  it('carries the branch to scan', () => {
+    const parsed = createScanSchema.parse({ applicationId: '651f1f77bcf86cd799439011', branch: 'release/2.4' });
+    expect(parsed.branch).toBe('release/2.4');
+    expect(parsed.registerBranch).toBe(true);
+  });
+
+  it('rejects a branch name git would refuse', () => {
+    expect(
+      createScanSchema.safeParse({ applicationId: '651f1f77bcf86cd799439011', branch: 'main; rm -rf /' }).success,
+    ).toBe(false);
   });
 
   it('rejects a non-hex commit id', () => {
     expect(
-      createScanSchema.safeParse({ projectId: '651f1f77bcf86cd799439011', commitId: 'zzz; rm -rf /' }).success,
+      createScanSchema.safeParse({ applicationId: '651f1f77bcf86cd799439011', commitId: 'zzz; rm -rf /' }).success,
     ).toBe(false);
   });
 
@@ -129,7 +219,8 @@ describe('email templates', () => {
   it('renders the scan summary with a severity-tagged subject', () => {
     const { subject, html, text } = renderTemplate('scanCompleted', {
       scanId: 'GLS-20260201-AB12CD',
-      projectName: 'Payments API',
+      applicationKey: 'PAY',
+      applicationName: 'Payments API',
       repoUrl: 'https://github.com/acme/payments.git',
       branch: 'main',
       commitId: 'abc1234',
@@ -141,8 +232,9 @@ describe('email templates', () => {
       durationSeconds: 42,
       severityLabel: 'CRITICAL',
     });
-    expect(subject).toBe('[CRITICAL] Scan GLS-20260201-AB12CD — Payments API');
+    expect(subject).toBe('[CRITICAL] PAY main — scan GLS-20260201-AB12CD');
     expect(html).toContain('Payments API');
+    expect(html).toContain('main');
     expect(text).not.toContain('<');
   });
 

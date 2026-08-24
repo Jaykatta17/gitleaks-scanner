@@ -6,7 +6,7 @@ export const AUDIT_CATEGORIES = [
   'authentication',
   'authorization',
   'user_management',
-  'project_management',
+  'application_management',
   'scan',
   'finding',
   'configuration',

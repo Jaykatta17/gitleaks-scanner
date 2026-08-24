@@ -26,7 +26,7 @@ import GlassCard from '../components/GlassCard.jsx';
 import StatTile from '../components/StatTile.jsx';
 import SeverityChip from '../components/SeverityChip.jsx';
 import { LoadingState, ErrorState, EmptyState } from '../components/States.jsx';
-import { FindingsTrendChart, SeverityBarChart, TopProjectsChart, ScanVolumeChart } from '../components/charts.jsx';
+import { FindingsTrendChart, SeverityBarChart, TopApplicationsChart, ScanVolumeChart } from '../components/charts.jsx';
 import { useAsync } from '../hooks/useAsync.js';
 import { api, errorMessage } from '../api/client.js';
 import { palette } from '../theme/tokens.js';
@@ -90,9 +90,9 @@ export const DashboardPage = () => {
         </Grid>
         <Grid item xs={12} sm={6} lg={3}>
           <StatTile
-            label="Projects monitored"
-            value={data?.projects?.active ?? 0}
-            caption={`${data?.projects?.archived ?? 0} archived`}
+            label="Applications monitored"
+            value={data?.applications?.active ?? 0}
+            caption={`${data?.applications?.archived ?? 0} archived`}
             icon={<FolderIcon />}
           />
         </Grid>
@@ -143,11 +143,11 @@ export const DashboardPage = () => {
         </Grid>
 
         <Grid item xs={12} lg={5}>
-          <GlassCard sx={{ height: '100%' }} title="Most exposed projects" subtitle="Ranked by open findings">
-            {data?.topProjects?.length ? (
-              <TopProjectsChart data={data.topProjects} />
+          <GlassCard sx={{ height: '100%' }} title="Most exposed applications" subtitle="Ranked by open findings">
+            {data?.topApplications?.length ? (
+              <TopApplicationsChart data={data.topApplications} />
             ) : (
-              <EmptyState title="No open findings" description="Every project is currently clean." />
+              <EmptyState title="No open findings" description="Every application is currently clean." />
             )}
           </GlassCard>
         </Grid>
@@ -184,13 +184,15 @@ export const DashboardPage = () => {
                   }
                 >
                   <ListItemText
-                    primary={`${scan.projectKey} · ${scan.branch}`}
+                    primary={`${scan.applicationKey} · ${scan.branch}`}
                     secondary={`${scan.summary?.total ?? 0} finding(s) · ${dayjs(scan.createdAt).fromNow()}`}
                     primaryTypographyProps={{ fontWeight: 600, fontSize: '0.9rem' }}
                   />
                 </ListItem>
               ))}
-              {!data?.scans?.recent?.length && <EmptyState title="No scans yet" description="Queue one from a project." />}
+              {!data?.scans?.recent?.length && (
+                <EmptyState title="No scans yet" description="Queue one from an application." />
+              )}
             </List>
           </GlassCard>
         </Grid>

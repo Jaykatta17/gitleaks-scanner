@@ -59,11 +59,15 @@ locked-down environments. Test a real relay from **Settings → Mail relay → S
 ## Common tasks
 
 ```bash
-# create the demo dataset (admin/analyst/developer/auditor + projects + scans)
+# create the demo dataset (users + applications with HOD/SPOC + branch scans)
 cd server && npm run seed
 
 # wipe the operational collections first
 npm run seed -- --reset
+
+# migrate an install that predates applications (projects → applications)
+npm run migrate:applications -- --dry-run
+npm run migrate:applications
 
 # run API and workers separately
 npm start
@@ -79,3 +83,5 @@ npm run worker
 | `refresh_replay` on sign-in | refresh token reused (or stolen) | all sessions for that user were revoked by design; sign in again |
 | Audit rows with `forwardedToSyslog: false` | collector down when the event was written | events are still in MongoDB; export them for the gap window |
 | Account locked | repeated failed sign-ins | **Users → unlock**, or wait `LOCKOUT_MINUTES` |
+| A branch scans but never appears in the list | it was scanned ad hoc | it is registered automatically on first scan; refresh the application |
+| Scheduled scans skip a branch | the branch is paused or unscheduled | check **Scheduled** and the paused chip on the branches tab |

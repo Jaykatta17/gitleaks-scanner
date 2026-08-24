@@ -4,8 +4,8 @@ import { api, setAccessToken, getAccessToken, setSessionLostHandler, errorMessag
 const AuthContext = createContext(null);
 
 const CAPABILITIES = {
-  admin: ['manageUsers', 'manageProjects', 'runScans', 'triageFindings', 'viewAudit', 'editSettings'],
-  security_analyst: ['manageProjects', 'runScans', 'triageFindings', 'viewAudit'],
+  admin: ['manageUsers', 'manageApplications', 'runScans', 'triageFindings', 'viewAudit', 'editSettings'],
+  security_analyst: ['manageApplications', 'runScans', 'triageFindings', 'viewAudit'],
   developer: ['runScans'],
   viewer: [],
 };

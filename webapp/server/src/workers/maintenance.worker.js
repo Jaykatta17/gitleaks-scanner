@@ -4,8 +4,8 @@ import logger from '../config/logger.js';
 import { createWorkerConnection } from '../queues/connection.js';
 import { QUEUE_NAMES, maintenanceQueue } from '../queues/index.js';
 import { Scan } from '../models/scan.model.js';
-import { Project } from '../models/project.model.js';
-import { queueScanForProject } from '../services/scan.service.js';
+import { Application } from '../models/application.model.js';
+import { queueScanForApplication } from '../services/scan.service.js';
 import { recordAudit } from '../services/audit.service.js';
 
 const log = logger.child({ worker: 'maintenance' });
@@ -14,7 +14,7 @@ const STALE_SCAN_MS = 6 * 60 * 60 * 1000;
 /** Marks scans whose worker died mid-run so the UI never shows a permanent "running". */
 export const reapStaleScans = async () => {
   const cutoff = new Date(Date.now() - STALE_SCAN_MS);
-  const stale = await Scan.find({ status: 'running', startedAt: { $lt: cutoff } }).select('scanId project');
+  const stale = await Scan.find({ status: 'running', startedAt: { $lt: cutoff } }).select('scanId application branch');
   if (!stale.length) return { reaped: 0 };
   await Scan.updateMany(
     { _id: { $in: stale.map((scan) => scan._id) } },
@@ -37,17 +37,37 @@ export const reapStaleScans = async () => {
   return { reaped: stale.length };
 };
 
-/** Queues every project whose schedule window has come round. */
+/**
+ * Queues every branch whose schedule is enabled. Scheduling lives on the branch,
+ * so an application can scan `main` nightly and a release branch weekly.
+ */
 export const runScheduledScans = async () => {
-  const projects = await Project.find({ archived: false, 'schedule.enabled': true }).select('_id key');
+  const applications = await Application.find({
+    archived: false,
+    'branches.schedule.enabled': true,
+  }).select('_id key branches');
   const queued = [];
-  for (const project of projects) {
-    try {
-      // eslint-disable-next-line no-await-in-loop -- bounded by the number of scheduled projects
-      const scan = await queueScanForProject({ projectId: project._id, trigger: 'scheduled' });
-      queued.push(scan.scanId);
-    } catch (error) {
-      log.error('scheduled scan failed to queue', { event: 'schedule.failed', project: project.key, error: error.message });
+  for (const application of applications) {
+    const dueBranches = application.branches.filter(
+      (branch) => branch.schedule?.enabled && branch.scanEnabled !== false,
+    );
+    for (const branch of dueBranches) {
+      try {
+        // eslint-disable-next-line no-await-in-loop -- bounded by the number of scheduled branches
+        const scan = await queueScanForApplication({
+          application,
+          branch: branch.name,
+          trigger: 'scheduled',
+        });
+        queued.push(scan.scanId);
+      } catch (error) {
+        log.error('scheduled scan failed to queue', {
+          event: 'schedule.failed',
+          application: application.key,
+          branch: branch.name,
+          error: error.message,
+        });
+      }
     }
   }
   if (queued.length) {

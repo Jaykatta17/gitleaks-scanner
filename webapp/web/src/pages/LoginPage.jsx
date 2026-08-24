@@ -22,7 +22,7 @@ import { glass, palette } from '../theme/tokens.js';
 
 const HIGHLIGHTS = [
   'Directory sign-in with group-mapped roles',
-  'Queued scans with retry and audit trail',
+  'Per-branch scans, queued with retry and audit trail',
   'Every action mirrored to syslog',
 ];
 
@@ -125,8 +125,8 @@ export const LoginPage = () => {
                 Find secrets before attackers do.
               </Typography>
               <Typography sx={{ color: alpha('#fff', 0.86), maxWidth: 460 }}>
-                Central control over repository secret scanning: onboard projects, queue scans, triage findings and hand
-                auditors a complete, tamper-evident trail.
+                Register applications with their owners and repositories, scan every branch on demand, triage the
+                findings and hand auditors a complete, tamper-evident trail.
               </Typography>
               <Stack spacing={1.25} sx={{ mt: 3.5 }}>
                 {HIGHLIGHTS.map((item) => (

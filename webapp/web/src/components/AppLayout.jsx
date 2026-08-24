@@ -40,7 +40,7 @@ const DRAWER_WIDTH = 264;
 
 const NAV_ITEMS = [
   { label: 'Dashboard', to: '/', icon: DashboardIcon, exact: true },
-  { label: 'Projects', to: '/projects', icon: FolderIcon },
+  { label: 'Applications', to: '/applications', icon: FolderIcon },
   { label: 'Scans', to: '/scans', icon: RadarIcon },
   { label: 'Findings', to: '/findings', icon: BugReportIcon },
   { label: 'Users', to: '/users', icon: PeopleIcon, capability: 'manageUsers' },

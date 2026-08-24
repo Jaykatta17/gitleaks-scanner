@@ -326,7 +326,7 @@ export const me = asyncHandler(async (req, res) => {
 
 export const capabilitiesFor = (role) => ({
   canManageUsers: role === 'admin',
-  canManageProjects: ['admin', 'security_analyst'].includes(role),
+  canManageApplications: ['admin', 'security_analyst'].includes(role),
   canRunScans: ['admin', 'security_analyst', 'developer'].includes(role),
   canTriageFindings: ['admin', 'security_analyst'].includes(role),
   canViewAudit: ['admin', 'security_analyst'].includes(role),
