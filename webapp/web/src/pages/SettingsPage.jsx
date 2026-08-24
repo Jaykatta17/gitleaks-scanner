@@ -76,6 +76,7 @@ export const SettingsPage = () => {
       <Grid container spacing={2.5}>
         <Grid item xs={12} md={6}>
           <GlassCard
+            sx={{ height: '100%' }}
             title="Directory (LDAP)"
             subtitle="Corporate sign-in and role mapping"
             action={
@@ -100,6 +101,7 @@ export const SettingsPage = () => {
 
         <Grid item xs={12} md={6}>
           <GlassCard
+            sx={{ height: '100%' }}
             title="Mail relay (SMTP)"
             subtitle="Notification delivery"
             action={<StatusChip ok={config?.smtp?.enabled} />}
@@ -131,7 +133,7 @@ export const SettingsPage = () => {
         </Grid>
 
         <Grid item xs={12} md={6}>
-          <GlassCard title="Audit forwarding (syslog)" subtitle="SIEM integration" action={<StatusChip ok={config?.syslog?.enabled} />}>
+          <GlassCard sx={{ height: '100%' }} title="Audit forwarding (syslog)" subtitle="SIEM integration" action={<StatusChip ok={config?.syslog?.enabled} />}>
             <DefinitionList
               rows={[
                 ['Collector', `${config?.syslog?.protocol}://${config?.syslog?.host}:${config?.syslog?.port}`],
@@ -147,7 +149,7 @@ export const SettingsPage = () => {
         </Grid>
 
         <Grid item xs={12} md={6}>
-          <GlassCard title="Authentication policy" subtitle="Applies to local accounts">
+          <GlassCard sx={{ height: '100%' }} title="Authentication policy" subtitle="Applies to local accounts">
             <DefinitionList
               rows={[
                 ['Minimum password length', config?.auth?.passwordMinLength],
@@ -162,7 +164,7 @@ export const SettingsPage = () => {
         </Grid>
 
         <Grid item xs={12} md={6}>
-          <GlassCard title="Scan engine" subtitle="How repositories are scanned">
+          <GlassCard sx={{ height: '100%' }} title="Scan engine" subtitle="How repositories are scanned">
             <DefinitionList
               rows={[
                 ['Driver', config?.scanner?.driver],
@@ -178,7 +180,7 @@ export const SettingsPage = () => {
         </Grid>
 
         <Grid item xs={12} md={6}>
-          <GlassCard title="Runtime" subtitle="Live service health" action={<Button size="small" onClick={reloadHealth}>Refresh</Button>}>
+          <GlassCard sx={{ height: '100%' }} title="Runtime" subtitle="Live service health" action={<Button size="small" onClick={reloadHealth}>Refresh</Button>}>
             <DefinitionList
               rows={[
                 ['Service', `${health?.app?.name} ${health?.app?.version} (${health?.app?.env})`],
